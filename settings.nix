@@ -2856,6 +2856,16 @@
                   {
                     tiled-state = nullable types.bool;
                   }
+                  {
+                    # supports upstream PR 2373
+                    inhibit-idle = nullable (
+                      types.enum [
+                        "always"
+                        "never"
+                        "fullscreen"
+                      ]
+                    );
+                  }
                 ]
               )
               // {

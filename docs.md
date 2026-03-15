@@ -3028,6 +3028,11 @@ Takes effect only when the window is on an output with [`outputs.<name>.variable
 - default: `null`
 
 
+## `programs.niri.settings.window-rules.*.inhibit-idle`
+- type: `null or one of "always", "never", "fullscreen"`
+- default: `null`
+
+
 ## `programs.niri.settings.layer-rules`
 - type: `list of (layer rule)`
 
