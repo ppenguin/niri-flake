@@ -2634,22 +2634,15 @@
                         If the final value is an output that does not exist, or it is null, then the window opens on the currently focused output.
                       '';
                     };
-                    open-on-workspace =
-                      nullable (
-                        types.oneOf [
-                          types.str
-                          types.int
-                        ]
-                      )
-                      // {
-                        description = ''
-                          The workspace to open this window on.
+                    open-on-workspace = nullable types.str // {
+                      description = ''
+                        The workspace to open this window on.
 
-                          If the final value is a numbered or existing named workspace, the windows opens on it.
+                        If the final value of this field is a named workspace that exists, the window will open on that workspace.
 
-                          If the final value of this is a named workspace that does not exist, or it is null, the window opens on the currently focused workspace.
-                        '';
-                      };
+                        If the final value of this is a named workspace that does not exist, or it is null, the window opens on the currently focused workspace.
+                      '';
+                    };
                     open-maximized = nullable types.bool // {
                       description = ''
                         Whether to open this window in a maximized column.
