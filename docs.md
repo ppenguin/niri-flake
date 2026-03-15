@@ -2654,12 +2654,12 @@ If the final value is an output that does not exist, or it is null, then the win
 
 
 ## `programs.niri.settings.window-rules.*.open-on-workspace`
-- type: `null or string`
+- type: `null or string or signed integer`
 - default: `null`
 
 The workspace to open this window on.
 
-If the final value of this field is a named workspace that exists, the window will open on that workspace.
+If the final value is a numbered or existing named workspace, the windows opens on it.
 
 If the final value of this is a named workspace that does not exist, or it is null, the window opens on the currently focused workspace.
 
