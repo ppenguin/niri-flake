@@ -2652,6 +2652,11 @@
                         If the final value of this field is true, then the window will open in a maximized column.
                       '';
                     };
+                    open-maximized-to-edges = nullable types.bool // {
+                      description = ''
+                        Whether to open this window maximized to the screen edges.
+                      '';
+                    };
                     open-fullscreen = nullable types.bool // {
                       description = ''
                         Whether to open this window in fullscreen.
@@ -3727,6 +3732,7 @@
             (nullable leaf "open-on-output" cfg.open-on-output)
             (nullable leaf "open-on-workspace" cfg.open-on-workspace)
             (nullable leaf "open-maximized" cfg.open-maximized)
+            (nullable leaf "open-maximized-to-edges" cfg.open-maximized-to-edges)
             (nullable leaf "open-fullscreen" cfg.open-fullscreen)
             (nullable leaf "open-floating" cfg.open-floating)
             (nullable leaf "open-focused" cfg.open-focused)
@@ -3748,6 +3754,7 @@
             (nullable leaf "variable-refresh-rate" cfg.variable-refresh-rate)
             (nullable leaf "scroll-factor" cfg.scroll-factor)
             (nullable leaf "tiled-state" cfg.tiled-state)
+            (nullable leaf "inhibit-idle" cfg.inhibit-idle)
           ])
         ]))
         (each cfg.layer-rules (cfg: [
