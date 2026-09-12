@@ -5,10 +5,10 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
 
-    niri-stable.url = "github:YaLTeR/niri/v25.08";
-    niri-unstable.url = "github:YaLTeR/niri";
+    niri-stable.url = "github:niri-wm/niri/v25.11";
+    niri-unstable.url = "github:niri-wm/niri";
 
-    xwayland-satellite-stable.url = "github:Supreeeme/xwayland-satellite/v0.7";
+    xwayland-satellite-stable.url = "github:Supreeeme/xwayland-satellite/v0.8.1";
     xwayland-satellite-unstable.url = "github:Supreeeme/xwayland-satellite";
 
     # they do all have flakes, but we specifically want just the Rust sources and no flakes.
@@ -96,7 +96,6 @@
           withSystemd ? true,
           fetchzip,
           runCommand,
-
           # remove param at next release after 25.11 (yes! i know that's not even the stable version provided by this flake right now. i'm Working On It™)
           replace-service-with-usr-bin,
         }:

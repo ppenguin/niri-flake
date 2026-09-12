@@ -15,7 +15,7 @@ You should preferably not be using these outputs directly. Instead, you should u
 
 The latest stable tagged version of niri, along with potential patches.
 
-Currently, this is release [`25.08`](https://github.com/YaLTeR/niri/releases/tag/25.08) with no additional patches.
+Currently, this is release [`25.11`](https://github.com/YaLTeR/niri/releases/tag/25.11) with no additional patches.
 
 
 
@@ -2635,6 +2635,13 @@ If the final value of this field is null or false, then the window will not open
 If the final value of this field is true, then the window will open in a maximized column.
 
 
+## `programs.niri.settings.window-rules.*.open-maximized-to-edges`
+- type: `null or boolean`
+- default: `null`
+
+Whether to open this window maximized to the screen edges.
+
+
 ## `programs.niri.settings.window-rules.*.open-on-output`
 - type: `null or string`
 - default: `null`
@@ -3025,6 +3032,11 @@ Takes effect only when the window is on an output with [`outputs.<name>.variable
 
 ## `programs.niri.settings.window-rules.*.tiled-state`
 - type: `null or boolean`
+- default: `null`
+
+
+## `programs.niri.settings.window-rules.*.inhibit-idle`
+- type: `null or one of "always", "never", "fullscreen"`
 - default: `null`
 
 
