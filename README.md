@@ -28,7 +28,7 @@ Currently, there is no `home-manager` input to this flake since i felt it was un
 
 # Binary Cache
 
-I have a binary cache for this flake's outputs. `niri.cachix.org` hosts builds of `niri-stable` and `niri-unstable` for `nixos-unstable` and `nixos-25.05`. It only contains builds for `x86_64-linux` for the time being, mainly because GitHub Actions doesn't support other platforms. (and i do not wish to use qemu for this)
+I have a binary cache for this flake's outputs. `niri.cachix.org` hosts builds of `niri-unstable` for `nixos-unstable`. It only contains builds for `x86_64-linux` for the time being, mainly because GitHub Actions doesn't support other platforms. (and i do not wish to use qemu for this)
 
 > [!note]
 > This binary cache is managed by me, sodiboo. By using it, you are trusting me to not serve you malicious software. Using a binary cache is entirely optional.
@@ -50,7 +50,7 @@ Both `niri.nixosModules.niri` and `niri.homeModules.niri` provide the option to 
 }
 ```
 
-You can also set the package to the one from nixpkgs (`pkgs.niri`), which will likely receive updates slower than the `niri-stable` provided here.
+You can also set the package to the one from nixpkgs (`pkgs.niri`), which will likely receive updates slower than the `niri-unstable` provided here.
 
 `niri.homeModules.config` also provides the option to set the package. This won't install niri by itself, but it does set the package version used for build-time validation.
 

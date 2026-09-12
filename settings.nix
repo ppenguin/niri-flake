@@ -27,7 +27,6 @@
         enum
         ;
 
-      binds-stable = binds "${inputs.niri-stable}/niri-config/src/binds.rs";
       binds-unstable = binds "${inputs.niri-unstable}/niri-config/src/binds.rs";
 
       record = record' null;
@@ -3121,36 +3120,15 @@
 
           package-option = fake-option "programs.niri.package" ''
             - type: `package`
-            - default: ${pkg-link "niri-stable"}
+            - default: ${pkg-link "niri-unstable"}
 
             The package that niri will use.
 
             You may wish to set it to the following values:
 
             - ${nixpkgs-link "niri"}
-            - ${pkg-link "niri-stable"}
             - ${pkg-link "niri-unstable"}
           '';
-
-          patches =
-            pkg:
-            builtins.concatMap (
-              patch:
-              let
-                m = lib.strings.match "${lib.escapeRegex "https://github.com/YaLTeR/niri/commit/"}([0-9a-f]{40})${lib.escapeRegex ".patch"}" patch.url;
-              in
-              if m != null then
-                [
-                  {
-                    rev = builtins.head m;
-                    inherit (patch) url;
-                  }
-                ]
-              else
-                [ ]
-            ) (pkg.patches or [ ]);
-
-          stable-patches = patches inputs.self.packages.x86_64-linux.niri-stable;
         in
         {
           a.nonmodules = {
@@ -3164,23 +3142,6 @@
                 > Packages for `aarch64-linux` are untested. They might work, but i can't guarantee it.
 
                 You should preferably not be using these outputs directly. Instead, you should use ${link' "overlays.niri"}.
-              '';
-              niri-stable = pkg-output "niri-stable" ''
-                The latest stable tagged version of niri, along with potential patches.
-
-                Currently, this is release ${link-niri-release inputs.self.packages.x86_64-linux.niri-stable.version}${
-                  if stable-patches != [ ] then " plus the following patches:" else " with no additional patches."
-                }
-
-                ${builtins.concatStringsSep "\n" (
-                  map (
-                    {
-                      rev,
-                      url,
-                    }:
-                    "- [`${rev}`](${lib.removeSuffix ".patch" url})"
-                  ) stable-patches
-                )}
               '';
               niri-unstable = pkg-output "niri-unstable" ''
                 The latest commit to the development branch of niri.
@@ -3197,7 +3158,7 @@
             };
 
             b.overlay = fake-option "overlays.niri" ''
-              A nixpkgs overlay that provides `niri-stable` and `niri-unstable`.
+              A nixpkgs overlay that provides `niri-unstable`.
 
               It is recommended to use this overlay over directly accessing the outputs. This is because the overlay ensures that the dependencies match your system's nixpkgs version, which is most important for `mesa`. If `mesa` doesn't match, niri will be unable to run in a TTY.
 
@@ -3209,7 +3170,7 @@
               }
               ```
 
-              You can then access the packages via `pkgs.niri-stable` and `pkgs.niri-unstable` as if they were part of nixpkgs.
+              You can then access the packages via `pkgs.niri-unstable` as if they were part of nixpkgs.
             '';
           };
           b.modules = {
@@ -3235,7 +3196,7 @@
 
                     Using a binary cache can save you time, by avoiding redundant rebuilds.
 
-                    This cache is managed by me, sodiboo, and i use GitHub Actions to automaticaly upload builds of ${pkg-link "niri-stable"} and ${pkg-link "niri-unstable"} (for nixpkgs unstable and stable). By using it, you are trusting me to not upload malicious builds, and as such you may disable it.
+                    This cache is managed by me, sodiboo, and i use GitHub Actions to automaticaly upload builds of ${pkg-link "niri-unstable"} (for nixpkgs unstable). By using it, you are trusting me to not upload malicious builds, and as such you may disable it.
 
                     If you do not wish to use this cache, then you may wish to set ${link' "programs.niri.package"} to ${nixpkgs-link "niri"}, in order to take advantage of the NixOS cache.
                   '';
@@ -3301,7 +3262,7 @@
 
                 b.package = fake-option "programs.niri.package" ''
                   - type: `package`
-                  - default: ${pkg-link "niri-stable"}
+                  - default: ${pkg-link "niri-unstable"}
 
                   The `niri` package that the config is validated against. This cannot be modified if you set the identically-named option in ${link' "nixosModules.niri"} or ${link' "homeModules.niri"}.
                 '';

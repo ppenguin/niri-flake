@@ -3,18 +3,13 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
 
-    niri-stable.url = "github:niri-wm/niri/v25.11";
     niri-unstable.url = "github:niri-wm/niri";
 
-    xwayland-satellite-stable.url = "github:Supreeeme/xwayland-satellite/v0.8.1";
     xwayland-satellite-unstable.url = "github:Supreeeme/xwayland-satellite";
 
     # they do all have flakes, but we specifically want just the Rust sources and no flakes.
-    niri-stable.flake = false;
     niri-unstable.flake = false;
-    xwayland-satellite-stable.flake = false;
     xwayland-satellite-unstable.flake = false;
   };
 
@@ -22,7 +17,6 @@
     inputs@{
       self,
       nixpkgs,
-      nixpkgs-stable,
       ...
     }:
     let
@@ -87,7 +81,7 @@
           seatd,
           libinput,
           libxkbcommon,
-          libdisplay-info_0_2 ? libdisplay-info,
+          libdisplay-info_0_3 ? libdisplay-info,
           libdisplay-info,
           pango,
           withDbus ? true,
@@ -99,7 +93,7 @@
           # remove param at next release after 25.11 (yes! i know that's not even the stable version provided by this flake right now. i'm Working On It™)
           replace-service-with-usr-bin,
         }:
-        assert libdisplay-info_0_2.version == "0.2.0";
+        assert libdisplay-info_0_3.version == "0.3.0";
         rustPlatform.buildRustPackage {
           pname = "niri";
           version = package-version src;
@@ -121,7 +115,7 @@
             libglvnd
             seatd
             libinput
-            libdisplay-info_0_2
+            libdisplay-info_0_3
             libxkbcommon
             pango
           ]
@@ -303,16 +297,9 @@
         };
 
       make-package-set = pkgs: {
-        niri-stable = pkgs.callPackage make-niri {
-          src = inputs.niri-stable;
-          replace-service-with-usr-bin = true;
-        };
         niri-unstable = pkgs.callPackage make-niri {
           src = inputs.niri-unstable;
           replace-service-with-usr-bin = false;
-        };
-        xwayland-satellite-stable = pkgs.callPackage make-xwayland-satellite {
-          src = inputs.xwayland-satellite-stable;
         };
         xwayland-satellite-unstable = pkgs.callPackage make-xwayland-satellite {
           src = inputs.xwayland-satellite-unstable;
@@ -345,7 +332,6 @@
               '')
               {
                 nixos-unstable = nixpkgs;
-                "nixos-25.11" = nixpkgs-stable;
               }
           )
         );
@@ -393,7 +379,7 @@
           program = nixpkgs.lib.getExe package;
         }) (make-package-set inputs.nixpkgs.legacyPackages.${system}))
         // {
-          default = self.apps.${system}.niri-stable;
+          default = self.apps.${system}.niri-unstable;
         }
       );
 
@@ -424,7 +410,7 @@
           options.programs.niri = {
             package = nixpkgs.lib.mkOption {
               type = nixpkgs.lib.types.package;
-              default = (make-package-set pkgs).niri-stable;
+              default = (make-package-set pkgs).niri-unstable;
               description = "The niri package to use.";
             };
           };
@@ -464,7 +450,7 @@
             enable = nixpkgs.lib.mkEnableOption "niri";
             package = nixpkgs.lib.mkOption {
               type = nixpkgs.lib.types.package;
-              default = (make-package-set pkgs).niri-stable;
+              default = (make-package-set pkgs).niri-unstable;
               description = "The niri package to use.";
             };
           };
@@ -585,7 +571,7 @@
         in
         {
           cached-packages = cached-packages-for system;
-          empty-config-valid-stable =
+          empty-config-valid =
             let
               eval = nixpkgs.lib.evalModules {
                 modules = [
@@ -596,17 +582,10 @@
                 ];
               };
             in
-            validated-config-for inputs.nixpkgs.legacyPackages.${system} self.packages.${system}.niri-stable
+            validated-config-for inputs.nixpkgs.legacyPackages.${system} self.packages.${system}.niri-unstable
               eval.config.programs.niri.finalConfig;
 
           nixos-unstable = test-nixos-for nixpkgs [
-            self.nixosModules.niri
-            {
-              programs.niri.enable = true;
-            }
-          ];
-
-          nixos-stable = test-nixos-for nixpkgs-stable [
             self.nixosModules.niri
             {
               programs.niri.enable = true;
