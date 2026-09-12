@@ -44,7 +44,6 @@
       required = type: mkOption { inherit type; };
       nullable = type: optional (nullOr type) null;
       optional = type: default: mkOption { inherit type default; };
-      readonly = type: value: optional type value // { readOnly = true; };
       docs-only =
         type:
         required (type // { check = _: true; })
@@ -112,7 +111,7 @@
       link-niri-release =
         version:
         fmt.masked-link {
-          href = "https://github.com/YaLTeR/niri/releases/tag/${version}";
+          href = "https://github.com/niri-wm/niri/releases/tag/${version}";
           content = fmt.code version;
         };
 
@@ -246,6 +245,61 @@
             ]}
           '';
         };
+      };
+
+      tablet-touch-common = {
+        enable = optional types.bool true;
+        map-to-output = nullable types.str;
+        calibration-matrix =
+          nullable (mkOptionType {
+            name = "matrix";
+            description = "2x3 matrix";
+            check =
+              matrix:
+              builtins.isList matrix
+              && builtins.length matrix == 2
+              && builtins.all (
+                row: builtins.isList row && builtins.length row == 3 && builtins.all builtins.isFloat row
+              ) matrix;
+            merge = lib.mergeUniqueOption {
+              message = "";
+              merge = loc: defs: builtins.concatLists (builtins.head defs).value;
+            };
+          })
+          // {
+            description = ''
+              An augmented calibration matrix for the tablet and touch.
+
+              This is represented in Nix as a 2-list of 3-lists of floats.
+
+              For example:
+              ${fmt.nix-code-block ''
+                {
+                  # 90 degree rotation clockwise
+                  calibration-matrix = [
+                    [ 0.0 -1.0 1.0 ]
+                    [ 1.0  0.0 0.0 ]
+                  ];
+                }
+              ''}
+
+              Further reading:
+              ${fmt.list [
+                (fmt.masked-link {
+                  href = "https://wayland.freedesktop.org/libinput/doc/1.8.2/group__config.html#ga3d9f1b9be10e804e170c4ea455bd1f1b";
+                  content = fmt.code "libinput_device_config_calibration_get_default_matrix()";
+                })
+                (fmt.masked-link {
+                  href = "https://wayland.freedesktop.org/libinput/doc/1.8.2/group__config.html#ga09a798f58cc601edd2797780096e9804";
+                  content = fmt.code "libinput_device_config_calibration_set_matrix()";
+                })
+                (fmt.masked-link {
+                  href = "https://smithay.github.io/smithay/input/struct.Device.html#method.config_calibration_set_matrix";
+                  content = "rustdoc because libinput's web docs are an eyesore";
+                })
+              ]}
+            '';
+          };
       };
 
       preset-size =
@@ -464,18 +518,23 @@
           name,
           window,
           description,
+          withDefault ? true,
         }:
         section' (
           { options, ... }:
+          let
+            optional-default =
+              type: value: if withDefault then (optional type value) else (optional (nullOr type) null);
+          in
           {
             imports = make-ordered-options [
               {
-                enable = optional types.bool enable-by-default // {
+                enable = optional-default types.bool enable-by-default // {
                   description = ''
                     Whether to enable the ${name}.
                   '';
                 };
-                width = optional float-or-int 4 // {
+                width = optional-default float-or-int 4 // {
                   description = ''
                     The width of the ${name} drawn around each ${window}.
                   '';
@@ -498,6 +557,52 @@
         )
         // {
           inherit description;
+        };
+
+      background-effect =
+        rule:
+        section {
+          blur = nullable types.bool // {
+            description = "Whether to force background blur for ${rule}, even though the application does not request it.";
+          };
+          xray = nullable types.bool // {
+            description = ''
+              Whether to see the wallpaper through overlapping windows. It computes the background blur once and applies it to all windows instead of computing the blur for each window.
+
+              Enabled by default when any other background effect is enabled for performance.
+
+              ${fmt.admonition.warning "Disabling this option is considered experimental due to ${
+                fmt.masked-link {
+                  href = "https://niri-wm.github.io/niri/Window-Effects.html#non-xray-effects-experimental";
+                  content = "limitations";
+                }
+              }."}
+            '';
+          };
+        };
+
+      popups =
+        self:
+        section {
+          geometry-corner-radius = geometry-corner-radius-rule // {
+            description = ''
+              The corner radii of the popups in logical pixels.
+            '';
+          };
+
+          opacity = nullable types.float // {
+            description = ''
+              Opacity of the popups. It is applied on top of the layer surface's own opacity rule, so setting both will make pop-ups more transparent than the surface.
+            '';
+          };
+
+          background-effect = background-effect "popups" // {
+            description = ''
+              Background effect applied to popups.
+
+              ${link-opt (subopts (subopts self).background-effect).xray} is disabled by default since popups often overlap other windows.
+            '';
+          };
         };
 
       border-rule =
@@ -869,37 +974,345 @@
         ordered-record
         make-section
       ];
+
+      layout =
+        {
+          options,
+          self,
+          withDefault ? true,
+          root ? true,
+        }:
+        let
+          optional-default =
+            type: value: if withDefault then (optional type value) else (optional (nullOr type) null);
+        in
+        ordered-section (
+          [
+            {
+              focus-ring = borderish {
+                enable-by-default = true;
+                inherit withDefault;
+                name = "focus ring";
+                window = "focused window";
+                description = ''
+                  The focus ring is a decoration drawn ${fmt.em "around"} the last focused window on each monitor. It takes no space away from windows. If you have insufficient gaps, the focus ring can be drawn over adjacent windows, but it will never affect the layout of windows.
+
+                  The focused window of the currently focused monitor, i.e. the window that can receive keyboard input, will be drawn according to ${link-opt (subopts (subopts self).focus-ring).active}, and the last focused window on all other monitors will be drawn according to ${link-opt (subopts (subopts self).focus-ring).inactive}.
+
+                  If you have ${link-opt (subopts self).border} enabled, the focus ring will be drawn around (and under) the border.
+                '';
+              };
+
+              border = borderish {
+                enable-by-default = false;
+                inherit withDefault;
+                name = "border";
+                window = "window";
+                description = ''
+                  The border is a decoration drawn ${fmt.em "inside"} every window in the layout. It will take space away from windows. That is, if you have a border of 8px, then each window will be 8px smaller on each edge than if you had no border.
+
+                  The currently focused window, i.e. the window that can receive keyboard input, will be drawn according to ${link-opt (subopts (subopts self).border).active}, and all other windows will be drawn according to ${link-opt (subopts (subopts self).border).inactive}.
+
+                  If you have ${link-opt (subopts self).focus-ring} enabled, the border will be drawn inside (and over) the focus ring.
+                '';
+              };
+            }
+            {
+              shadow = section {
+                enable = optional types.bool false;
+                offset =
+                  section {
+                    x = optional-default float-or-int 0.0;
+                    y = optional-default float-or-int 5.0;
+                  }
+                  // {
+                    description = shadow-descriptions.offset;
+                  };
+
+                softness = optional-default float-or-int 30.0 // {
+                  description = shadow-descriptions.softness;
+                };
+
+                spread = optional-default float-or-int 5.0 // {
+                  description = shadow-descriptions.spread;
+                };
+
+                draw-behind-window = optional-default types.bool false;
+
+                # 0x70 is 43.75% so let's use hex notation lol
+                color = optional-default types.str "#00000070";
+
+                inactive-color = nullable types.str;
+              };
+            }
+          ]
+          ++ lib.optional root {
+            insert-hint =
+              section' (
+                { options, ... }:
+                {
+                  imports = make-ordered-options [
+                    {
+                      enable = optional types.bool true // {
+                        description = ''
+                          Whether to enable the insert hint.
+                        '';
+                      };
+                    }
+                    (make-decoration-options options {
+                      display.description = ''
+                        The color of the insert hint.
+                      '';
+                    })
+                  ];
+                }
+              )
+              // {
+                description = ''
+                  The insert hint is a decoration drawn ${fmt.em "between"} windows during an interactive move operation. It is drawn in the gap where the window will be inserted when you release the window. It does not occupy any space in the gap, and the insert hint extends onto the edges of adjacent windows. When you release the moved window, the windows that are covered by the insert hint will be pushed aside to make room for the moved window.
+                '';
+              };
+          }
+          ++ [
+            {
+              "<decoration>" =
+                let
+                  self' = docs-only (decoration (self' // { loc = [ "<decoration>" ]; })) // {
+                    override-loc = lib.const [ "<decoration>" ];
+                    description = ''
+                      A decoration is drawn around a surface, adding additional elements that are not necessarily part of an application, but are part of what we think of as a "window".
+
+                      This type specifically represents decorations drawn by niri: that is, ${link-opt (subopts self).focus-ring} and/or ${link-opt (subopts self).border}.
+                    '';
+                  };
+                in
+                self';
+            }
+            {
+              background-color = nullable types.str // {
+                description = ''
+                  The default background color that niri draws for workspaces. This is visible when you're not using any background tools like swaybg.
+                '';
+              };
+            }
+            {
+              preset-column-widths = list preset-width // {
+                description = ''
+                  The widths that ${fmt.code "switch-preset-column-width"} will cycle through.
+
+                  Each width can either be a fixed width in logical pixels, or a proportion of the screen's width.
+
+                  Example:
+
+                  ${fmt.nix-code-block ''
+                    {
+                      ${(subopts self).preset-column-widths} = [
+                        { proportion = 1. / 3.; }
+                        { proportion = 1. / 2.; }
+                        { proportion = 2. / 3.; }
+
+                        # { fixed = 1920; }
+                      ];
+                    }
+                  ''}
+                '';
+              };
+              preset-window-heights = list preset-height // {
+                description = ''
+                  The heights that ${fmt.code "switch-preset-window-height"} will cycle through.
+
+                  Each height can either be a fixed height in logical pixels, or a proportion of the screen's height.
+
+                  Example:
+
+                  ${fmt.nix-code-block ''
+                    {
+                      ${(subopts self).preset-window-heights} = [
+                        { proportion = 1. / 3.; }
+                        { proportion = 1. / 2.; }
+                        { proportion = 2. / 3.; }
+
+                        # { fixed = 1080; }
+                      ];
+                    }
+                  ''}
+                '';
+              };
+            }
+            {
+              default-column-width = optional-default default-width { } // {
+                description = ''
+                  The default width for new columns.
+
+                  When this is set to an empty attrset ${fmt.code "{}"}, windows will get to decide their initial width. This is not null, such that it can be distinguished from window rules that don't touch this
+
+                  See ${link-opt (subopts self).preset-column-widths} for more information.
+
+                  You can override this for specific windows using ${link-opt (subopts options.window-rules).default-column-width}
+                '';
+              };
+              center-focused-column =
+                optional-default (enum [
+                  "never"
+                  "always"
+                  "on-overflow"
+                ]) "never"
+                // {
+                  description = ''
+                    When changing focus, niri can automatically center the focused column.
+
+                    ${fmt.list [
+                      "${fmt.code ''"never"''}: If the focused column doesn't fit, it will be aligned to the edges of the screen."
+                      "${fmt.code ''"on-overflow"''}: if the focused column doesn't fit, it will be centered on the screen."
+                      "${fmt.code ''"always"''}: the focused column will always be centered, even if it was already fully visible."
+                    ]}
+                  '';
+                };
+              always-center-single-column = optional types.bool false // {
+                description = ''
+                  This is like ${fmt.code ''center-focused-column = "always";''}, but only for workspaces with a single column. Changes nothing if ${fmt.code "center-focused-column"} is set to ${fmt.code ''"always"''}. Has no effect if more than one column is present.
+                '';
+              };
+              default-column-display =
+                optional-default (enum [
+                  "normal"
+                  "tabbed"
+                ]) "normal"
+                // {
+                  description = ''
+                    How windows in columns should be displayed by default.
+
+                    ${fmt.list [
+                      "${fmt.code ''"normal"''}: Windows are arranged vertically, spread across the working area height."
+                      "${fmt.code ''"tabbed"''}: Windows are arranged in tabs, with only the focused window visible, taking up the full height of the working area."
+                    ]}
+
+                    Note that you can override this for a given column at any time. Every column remembers its own display mode, independent from this setting. This setting controls the default value when a column is ${fmt.em "created"}.
+
+                    Also, since a newly created column always contains a single window, you can override this default value with ${link-opt (subopts options.window-rules).default-column-display}.
+                  '';
+                };
+
+              tab-indicator = nullable (
+                submodule (
+                  { options, ... }:
+                  {
+                    imports = make-ordered-options [
+                      {
+                        enable = optional types.bool true;
+                        hide-when-single-tab = optional types.bool false;
+                        place-within-column = optional types.bool false;
+                        gap = optional float-or-int 5.0;
+                        width = optional float-or-int 4.0;
+                        length.total-proportion = optional types.float 0.5;
+                        position = optional (enum [
+                          "left"
+                          "right"
+                          "top"
+                          "bottom"
+                        ]) "left";
+                        gaps-between-tabs = optional float-or-int 0.0;
+                        corner-radius = optional float-or-int 0.0;
+                      }
+
+                      (make-decoration-options options {
+                        urgent.description = ''
+                          The color of the tab indicator for windows that are requesting attention.
+                        '';
+                        active.description = ''
+                          The color of the tab indicator for the window that has keyboard focus.
+                        '';
+                        inactive.description = ''
+                          The color of the tab indicator for windows that do not have keyboard focus.
+                        '';
+                      })
+
+                    ];
+                  }
+                )
+              );
+            }
+            {
+              empty-workspace-above-first = optional types.bool false // {
+                description = ''
+                  Normally, niri has a dynamic amount of workspaces, with one empty workspace at the end. The first workspace really is the first workspace, and you cannot go past it, but going past the last workspace puts you on the empty workspace.
+
+                  When this is enabled, there will be an empty workspace above the first workspace, and you can go past the first workspace to get to an empty workspace, just as in the other direction. This makes workspace navigation symmetric in all ways except indexing.
+                '';
+              };
+              gaps = optional-default float-or-int 16 // {
+                description = ''
+                  The gap between windows in the layout, measured in logical pixels.
+                '';
+              };
+              struts =
+                section {
+                  left = optional-default float-or-int 0;
+                  right = optional-default float-or-int 0;
+                  top = optional-default float-or-int 0;
+                  bottom = optional-default float-or-int 0;
+                }
+                // {
+                  description = ''
+                    The distances from the edges of the screen to the eges of the working area.
+
+                    The top and bottom struts are absolute gaps from the edges of the screen. If you set a bottom strut of 64px and the scale is 2.0, then the output will have 128 physical pixels under the scrollable working area where it only shows the wallpaper.
+
+                    Struts are computed in addition to layer-shell surfaces. If you have a waybar of 32px at the top, and you set a top strut of 16px, then you will have 48 logical pixels from the actual edge of the display to the top of the working area.
+
+                    The left and right structs work in a similar way, except the padded space is not empty. The horizontal struts are used to constrain where focused windows are allowed to go. If you define a left strut of 64px and go to the first window in a workspace, that window will be aligned 64 logical pixels from the left edge of the output, rather than snapping to the actual edge of the screen. If another window exists to the left of this window, then you will see 64px of its right edge (if you have zero borders and gaps)
+                  '';
+                };
+            }
+          ]
+        );
+
     in
     submodule (
       { options, ... }:
       {
-        # config._module.niri-flake-ordered-record.ordering = lib.mkForce [
-        #   "input"
-        #   "outputs"
-        #   "binds"
-        #   "switch-events"
-        #   "layout"
-
-        #   "workspaces"
-
-        #   "spawn-at-startup"
-        #   "prefer-no-csd"
-        #   "screenshot-path"
-        #   "environment"
-        #   "overview"
-        #   "cursor"
-        #   "xwayland-satellite"
-        #   "clipboard"
-        #   "hotkey-overlay"
-
-        #   "window-rules"
-        #   "layer-rules"
-        #   "animations"
-        #   "gestures"
-
-        #   "debug"
-        # ];
         imports = make-ordered-options [
+          {
+            includes =
+              list (
+                types.either types.str (
+                  record' "optional include" {
+                    path = required types.str // {
+                      description = "Path to the config file to include";
+                    };
+                    optional = optional types.bool true // {
+                      description = ''
+                        Whether this config file is optional.
+
+                        If ${fmt.code "true"}, niri will silently fail to read ${fmt.code "path"}.
+                      '';
+                    };
+                  }
+                )
+              )
+              // {
+                description = ''
+                  Includes other kdl files into this config. Useful to include dynamic config files or use settings that are not yet defined in this module.
+
+                  For example:
+
+                  ${fmt.nix-code-block ''
+                    {
+                      ${options.includes} = with config.lib.niri.include; [
+                        # Raw string
+                        "extra.kdl" 
+
+                        # Full attribute set
+                        {path = "dynamic.kdl"; optional = true;}
+
+                        # Helper functions
+                        (optional "dynamic2.kdl")
+                      ];
+                    }
+                  ''}
+                '';
+              };
+          }
           {
             switch-events =
               let
@@ -1060,132 +1473,7 @@
                       };
                     }
                   ''}
-                ''
-
-                #   + ''
-                #   There is also a set of functions available under ${fmt.code "config.lib.niri.actions"}.
-
-                #   Usage is like so:
-
-                #   ${fmt.nix-code-block ''
-                #     {
-                #       ${options.binds} = with config.lib.niri.actions; {
-                #         "XF86AudioRaiseVolume".action = spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+";
-                #         "XF86AudioLowerVolume".action = spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-";
-
-                #         "Mod+D".action = spawn "fuzzel";
-                #         "Mod+1".action = focus-workspace 1;
-
-                #         "Mod+Shift+E".action = quit;
-                #         "Mod+Ctrl+Shift+E".action = quit { skip-confirmation=true; };
-
-                #         "Mod+Plus".action = set-column-width "+10%";
-                #       }
-                #     }
-                #   ''}
-
-                #   Keep in mind that each one of these attributes (i.e. the nix bindings) are actually identical functions with different node names, and they can take arbitrarily many arguments. The documentation here is based on the ${fmt.em "real"} acceptable arguments for these actions, but the nix bindings do not enforce this. If you pass the wrong arguments, niri will reject the config file, but evaluation will proceed without problems.
-
-                #   For actions that don't take any arguments, just use the corresponding attribute from ${fmt.code "config.lib.niri.actions"}. They are listed as ${fmt.code "action-name"}. For actions that ${fmt.em "do"} take arguments, they are notated like so: ${fmt.code "λ action-name :: <args>"}, to clarify that they "should" be used as functions. Hopefully, ${fmt.code "<args>"} will be clear enough in most cases, but it's worth noting some nontrivial kinds of arguments:
-
-                #   ${fmt.list [
-                #     ''
-                #       ${fmt.code "size-change"}: This is a special argument type used for some actions by niri. It's a string. \
-                #       It can take either a fixed size as an integer number of logical pixels (${fmt.code ''"480"''}, ${fmt.code ''"1200"''}) or a proportion of your screen as a percentage (${fmt.code ''"30%"''}, ${fmt.code ''"70%"''}) \
-                #       Additionally, it can either be an absolute change (setting the new size of the window), or a relative change (adding or subtracting from its size). \
-                #       Relative size changes are written with a ${fmt.code "+"}/${fmt.code "-"} prefix, and absolute size changes have no prefix.
-                #     ''
-                #     ''
-                #       ${fmt.code "{ field :: type }"}: This means that the action takes a named argument (in kdl, we call it a property). \
-                #       To pass such an argument, you should pass an attrset with the key and value. You can pass many properties in one attrset, or you can pass several attrsets with different properties. \
-                #       Required fields are marked with ${fmt.code "*"} before their name, and if no fields are required, you can use the action without any arguments too (see ${fmt.code "quit"} in the example above). \
-                #       If a field is marked with ${fmt.code "?"}, then omitting it is meaningful. (without ${fmt.code "?"}, it will have a default value)
-                #     ''
-                #     ''
-                #       ${fmt.code "[type]"}: This means that the action takes several arguments as a list. Although you can pass a list directly, it's more common to pass them as separate arguments. \
-                #       ${fmt.code ''spawn ["foo" "bar" "baz"]''} is equivalent to ${fmt.code ''spawn "foo" "bar" "baz"''}.
-                #     ''
-                #   ]}
-
-                #   ${fmt.admonition.tip ''
-                #     You can use partial application to create a spawn command with full support for shell syntax:
-                #     ${fmt.nix-code-block ''
-                #       {
-                #         ${options.binds} = with config.lib.niri.actions; let
-                #           sh = spawn "sh" "-c";
-                #         in {
-                #           "Print".action = sh '''grim -g "$(slurp)" - | wl-copy''';
-                #         };
-                #       }
-                #     ''}
-                #   ''}
-
-                #   ${
-                #     let
-                #       show-bind =
-                #         {
-                #           name,
-                #           params,
-                #           ...
-                #         }:
-                #         let
-                #           is-stable = builtins.any (a: a.name == name) binds-stable;
-                #           is-unstable = builtins.any (a: a.name == name) binds-unstable;
-                #           exclusive =
-                #             if is-stable && is-unstable then
-                #               ""
-                #             else if is-stable then
-                #               " (only on niri-stable)"
-                #             else
-                #               " (only on niri-unstable)";
-                #           type-names = {
-                #             LayoutSwitchTarget = ''"next" | "prev"'';
-                #             WorkspaceReference = "u8 | string";
-                #             SizeChange = "size-change";
-                #             bool = "bool";
-                #             u8 = "u8";
-                #             u16 = "u16";
-                #             String = "string";
-                #           };
-
-                #           type-or =
-                #             rust-name: fallback: type-names.${rust-name} or (lib.warn "unhandled type `${rust-name}`" fallback);
-
-                #           base = content: "${fmt.code content}${exclusive}";
-                #           lambda = args: base "λ ${name} :: ${args}";
-                #         in
-                #         {
-                #           empty = base "${name}";
-                #           arg = lambda (type-or params.type (if params.as-str then "string" else params.type));
-                #           list = lambda "[${type-or params.type params.type}]";
-                #           prop = lambda "{ ${
-                #             lib.optionalString (!params.use-default) "*"
-                #           }${params.field}${lib.optionalString params.none-important "?"} :: ${
-                #             type-names.${params.type} or (lib.warn "unhandled type `${params.type}`" params.type)
-                #           } }";
-                #           unknown = ''
-                #             ${lambda "unknown"}
-
-                #               The code that generates this documentation does not know how to parse the definition:
-                #               ```rs
-                #               ${params.raw-name}(${params.raw})
-                #               ```
-                #           '';
-                #         }
-                #         .${params.kind}
-                #           or (abort "action `${name}` with unhandled kind `${params.kind}` for settings docs");
-                #     in
-                #     fmt.list (
-                #       (map show-bind (
-                #         builtins.filter (
-                #           stable: builtins.all (unstable: stable.name != unstable.name) binds-unstable
-                #         ) binds-stable
-                #       ))
-                #       ++ (map show-bind binds-unstable)
-                #     )
-                #   }
-                # ''
-                ;
+                '';
               };
             };
           }
@@ -1341,6 +1629,15 @@
                     The name of the output the workspace should be assigned to.
                   '';
                 };
+                layout =
+                  layout {
+                    inherit options;
+                    self = (subopts options.workspaces).layout;
+                    withDefault = false;
+                  }
+                  // {
+                    description = "Per-workspace layout.";
+                  };
               })
               // {
                 description = ''
@@ -1370,6 +1667,7 @@
                   and a ${fmt.code "name"} attribute to have a friendlier name.
                 '';
               };
+
           }
 
           {
@@ -1685,61 +1983,13 @@
                 };
               trackpoint = pointer-tablet-common // basic-pointer false;
               trackball = pointer-tablet-common // basic-pointer false;
-              tablet = pointer-tablet-common // {
-                map-to-output = nullable types.str;
-                calibration-matrix =
-                  nullable (mkOptionType {
-                    name = "matrix";
-                    description = "2x3 matrix";
-                    check =
-                      matrix:
-                      builtins.isList matrix
-                      && builtins.length matrix == 2
-                      && builtins.all (
-                        row: builtins.isList row && builtins.length row == 3 && builtins.all builtins.isFloat row
-                      ) matrix;
-                    merge = lib.mergeUniqueOption {
-                      message = "";
-                      merge = loc: defs: builtins.concatLists (builtins.head defs).value;
-                    };
-                  })
-                  // {
-                    description = ''
-                      An augmented calibration matrix for the tablet.
-
-                      This is represented in Nix as a 2-list of 3-lists of floats.
-
-                      For example:
-                      ${fmt.nix-code-block ''
-                        {
-                          # 90 degree rotation clockwise
-                          calibration-matrix = [
-                            [ 0.0 -1.0 1.0 ]
-                            [ 1.0  0.0 0.0 ]
-                          ];
-                        }
-                      ''}
-
-                      Further reading:
-                      ${fmt.list [
-                        (fmt.masked-link {
-                          href = "https://wayland.freedesktop.org/libinput/doc/1.8.2/group__config.html#ga3d9f1b9be10e804e170c4ea455bd1f1b";
-                          content = fmt.code "libinput_device_config_calibration_get_default_matrix()";
-                        })
-                        (fmt.masked-link {
-                          href = "https://wayland.freedesktop.org/libinput/doc/1.8.2/group__config.html#ga09a798f58cc601edd2797780096e9804";
-                          content = fmt.code "libinput_device_config_calibration_set_matrix()";
-                        })
-                        (fmt.masked-link {
-                          href = "https://smithay.github.io/smithay/input/struct.Device.html#method.config_calibration_set_matrix";
-                          content = "rustdoc because libinput's web docs are an eyesore";
-                        })
-                      ]}
-                    '';
-                  };
-              };
-              touch.enable = optional types.bool true;
-              touch.map-to-output = nullable types.str;
+              tablet =
+                pointer-tablet-common
+                // tablet-touch-common
+                // {
+                  map-to-focused-output = optional types.bool false;
+                };
+              touch = tablet-touch-common;
               warp-mouse-to-focus =
                 let
                   inner = record {
@@ -1913,6 +2163,15 @@
                   When none of the connected outputs are explicitly focus-at-startup, niri will focus the first one sorted by name (same output sorting as used elsewhere in niri).
                 '';
               };
+              layout =
+                layout {
+                  inherit options;
+                  self = (subopts options.outputs).layout;
+                  withDefault = false;
+                }
+                // {
+                  description = "Per-output layout.";
+                };
             });
           }
 
@@ -1951,280 +2210,10 @@
           }
 
           {
-            layout = ordered-section [
-              {
-                focus-ring = borderish {
-                  enable-by-default = true;
-                  name = "focus ring";
-                  window = "focused window";
-                  description = ''
-                    The focus ring is a decoration drawn ${fmt.em "around"} the last focused window on each monitor. It takes no space away from windows. If you have insufficient gaps, the focus ring can be drawn over adjacent windows, but it will never affect the layout of windows.
-
-                    The focused window of the currently focused monitor, i.e. the window that can receive keyboard input, will be drawn according to ${link-opt (subopts (subopts options.layout).focus-ring).active}, and the last focused window on all other monitors will be drawn according to ${link-opt (subopts (subopts options.layout).focus-ring).inactive}.
-
-                    If you have ${link-opt (subopts options.layout).border} enabled, the focus ring will be drawn around (and under) the border.
-                  '';
-                };
-
-                border = borderish {
-                  enable-by-default = false;
-                  name = "border";
-                  window = "window";
-                  description = ''
-                    The border is a decoration drawn ${fmt.em "inside"} every window in the layout. It will take space away from windows. That is, if you have a border of 8px, then each window will be 8px smaller on each edge than if you had no border.
-
-                    The currently focused window, i.e. the window that can receive keyboard input, will be drawn according to ${link-opt (subopts (subopts options.layout).border).active}, and all other windows will be drawn according to ${link-opt (subopts (subopts options.layout).border).inactive}.
-
-                    If you have ${link-opt (subopts options.layout).focus-ring} enabled, the border will be drawn inside (and over) the focus ring.
-                  '';
-                };
-              }
-              {
-                shadow = section {
-                  enable = optional types.bool false;
-                  offset =
-                    section {
-                      x = optional float-or-int 0.0;
-                      y = optional float-or-int 5.0;
-                    }
-                    // {
-                      description = shadow-descriptions.offset;
-                    };
-
-                  softness = optional float-or-int 30.0 // {
-                    description = shadow-descriptions.softness;
-                  };
-
-                  spread = optional float-or-int 5.0 // {
-                    description = shadow-descriptions.spread;
-                  };
-
-                  draw-behind-window = optional types.bool false;
-
-                  # 0x70 is 43.75% so let's use hex notation lol
-                  color = optional types.str "#00000070";
-
-                  inactive-color = nullable types.str;
-                };
-              }
-              {
-                insert-hint =
-                  section' (
-                    { options, ... }:
-                    {
-                      imports = make-ordered-options [
-                        {
-                          enable = optional types.bool true // {
-                            description = ''
-                              Whether to enable the insert hint.
-                            '';
-                          };
-                        }
-                        (make-decoration-options options {
-                          display.description = ''
-                            The color of the insert hint.
-                          '';
-                        })
-                      ];
-                    }
-                  )
-                  // {
-                    description = ''
-                      The insert hint is a decoration drawn ${fmt.em "between"} windows during an interactive move operation. It is drawn in the gap where the window will be inserted when you release the window. It does not occupy any space in the gap, and the insert hint extends onto the edges of adjacent windows. When you release the moved window, the windows that are covered by the insert hint will be pushed aside to make room for the moved window.
-                    '';
-                  };
-              }
-              {
-                "<decoration>" =
-                  let
-                    self = docs-only (decoration (self // { loc = [ "<decoration>" ]; })) // {
-                      override-loc = lib.const [ "<decoration>" ];
-                      description = ''
-                        A decoration is drawn around a surface, adding additional elements that are not necessarily part of an application, but are part of what we think of as a "window".
-
-                        This type specifically represents decorations drawn by niri: that is, ${link-opt (subopts options.layout).focus-ring} and/or ${link-opt (subopts options.layout).border}.
-                      '';
-                    };
-                  in
-                  self;
-              }
-              {
-                background-color = nullable types.str // {
-                  description = ''
-                    The default background color that niri draws for workspaces. This is visible when you're not using any background tools like swaybg.
-                  '';
-                };
-              }
-              {
-                preset-column-widths = list preset-width // {
-                  description = ''
-                    The widths that ${fmt.code "switch-preset-column-width"} will cycle through.
-
-                    Each width can either be a fixed width in logical pixels, or a proportion of the screen's width.
-
-                    Example:
-
-                    ${fmt.nix-code-block ''
-                      {
-                        ${(subopts options.layout).preset-column-widths} = [
-                          { proportion = 1. / 3.; }
-                          { proportion = 1. / 2.; }
-                          { proportion = 2. / 3.; }
-
-                          # { fixed = 1920; }
-                        ];
-                      }
-                    ''}
-                  '';
-                };
-                preset-window-heights = list preset-height // {
-                  description = ''
-                    The heights that ${fmt.code "switch-preset-window-height"} will cycle through.
-
-                    Each height can either be a fixed height in logical pixels, or a proportion of the screen's height.
-
-                    Example:
-
-                    ${fmt.nix-code-block ''
-                      {
-                        ${(subopts options.layout).preset-window-heights} = [
-                          { proportion = 1. / 3.; }
-                          { proportion = 1. / 2.; }
-                          { proportion = 2. / 3.; }
-
-                          # { fixed = 1080; }
-                        ];
-                      }
-                    ''}
-                  '';
-                };
-              }
-              {
-                default-column-width = optional default-width { } // {
-                  description = ''
-                    The default width for new columns.
-
-                    When this is set to an empty attrset ${fmt.code "{}"}, windows will get to decide their initial width. This is not null, such that it can be distinguished from window rules that don't touch this
-
-                    See ${link-opt (subopts options.layout).preset-column-widths} for more information.
-
-                    You can override this for specific windows using ${link-opt (subopts options.window-rules).default-column-width}
-                  '';
-                };
-                center-focused-column =
-                  optional (enum [
-                    "never"
-                    "always"
-                    "on-overflow"
-                  ]) "never"
-                  // {
-                    description = ''
-                      When changing focus, niri can automatically center the focused column.
-
-                      ${fmt.list [
-                        "${fmt.code ''"never"''}: If the focused column doesn't fit, it will be aligned to the edges of the screen."
-                        "${fmt.code ''"on-overflow"''}: if the focused column doesn't fit, it will be centered on the screen."
-                        "${fmt.code ''"always"''}: the focused column will always be centered, even if it was already fully visible."
-                      ]}
-                    '';
-                  };
-                always-center-single-column = optional types.bool false // {
-                  description = ''
-                    This is like ${fmt.code ''center-focused-column = "always";''}, but only for workspaces with a single column. Changes nothing if ${fmt.code "center-focused-column"} is set to ${fmt.code ''"always"''}. Has no effect if more than one column is present.
-                  '';
-                };
-                default-column-display =
-                  optional (enum [
-                    "normal"
-                    "tabbed"
-                  ]) "normal"
-                  // {
-                    description = ''
-                      How windows in columns should be displayed by default.
-
-                      ${fmt.list [
-                        "${fmt.code ''"normal"''}: Windows are arranged vertically, spread across the working area height."
-                        "${fmt.code ''"tabbed"''}: Windows are arranged in tabs, with only the focused window visible, taking up the full height of the working area."
-                      ]}
-
-                      Note that you can override this for a given column at any time. Every column remembers its own display mode, independent from this setting. This setting controls the default value when a column is ${fmt.em "created"}.
-
-                      Also, since a newly created column always contains a single window, you can override this default value with ${link-opt (subopts options.window-rules).default-column-display}.
-                    '';
-                  };
-
-                tab-indicator = nullable (
-                  submodule (
-                    { options, ... }:
-                    {
-                      imports = make-ordered-options [
-                        {
-                          enable = optional types.bool true;
-                          hide-when-single-tab = optional types.bool false;
-                          place-within-column = optional types.bool false;
-                          gap = optional float-or-int 5.0;
-                          width = optional float-or-int 4.0;
-                          length.total-proportion = optional types.float 0.5;
-                          position = optional (enum [
-                            "left"
-                            "right"
-                            "top"
-                            "bottom"
-                          ]) "left";
-                          gaps-between-tabs = optional float-or-int 0.0;
-                          corner-radius = optional float-or-int 0.0;
-                        }
-
-                        (make-decoration-options options {
-                          urgent.description = ''
-                            The color of the tab indicator for windows that are requesting attention.
-                          '';
-                          active.description = ''
-                            The color of the tab indicator for the window that has keyboard focus.
-                          '';
-                          inactive.description = ''
-                            The color of the tab indicator for windows that do not have keyboard focus.
-                          '';
-                        })
-
-                      ];
-                    }
-                  )
-                );
-              }
-              {
-                empty-workspace-above-first = optional types.bool false // {
-                  description = ''
-                    Normally, niri has a dynamic amount of workspaces, with one empty workspace at the end. The first workspace really is the first workspace, and you cannot go past it, but going past the last workspace puts you on the empty workspace.
-
-                    When this is enabled, there will be an empty workspace above the first workspace, and you can go past the first workspace to get to an empty workspace, just as in the other direction. This makes workspace navigation symmetric in all ways except indexing.
-                  '';
-                };
-                gaps = optional float-or-int 16 // {
-                  description = ''
-                    The gap between windows in the layout, measured in logical pixels.
-                  '';
-                };
-                struts =
-                  section {
-                    left = optional float-or-int 0;
-                    right = optional float-or-int 0;
-                    top = optional float-or-int 0;
-                    bottom = optional float-or-int 0;
-                  }
-                  // {
-                    description = ''
-                      The distances from the edges of the screen to the eges of the working area.
-
-                      The top and bottom struts are absolute gaps from the edges of the screen. If you set a bottom strut of 64px and the scale is 2.0, then the output will have 128 physical pixels under the scrollable working area where it only shows the wallpaper.
-
-                      Struts are computed in addition to layer-shell surfaces. If you have a waybar of 32px at the top, and you set a top strut of 16px, then you will have 48 logical pixels from the actual edge of the display to the top of the working area.
-
-                      The left and right structs work in a similar way, except the padded space is not empty. The horizontal struts are used to constrain where focused windows are allowed to go. If you define a left strut of 64px and go to the first window in a workspace, that window will be aligned 64 logical pixels from the left edge of the output, rather than snapping to the actual edge of the screen. If another window exists to the left of this window, then you will see 64px of its right edge (if you have zero borders and gaps)
-                    '';
-                  };
-              }
-            ];
+            layout = layout {
+              inherit options;
+              self = options.layout;
+            };
           }
 
           {
@@ -2273,6 +2262,7 @@
                   window-resize.has-shader = true;
                   screenshot-ui-open.has-shader = false;
                   overview-open-close.has-shader = false;
+                  recent-windows-close.has-shader = false;
                 };
               in
               ordered-section [
@@ -2308,7 +2298,7 @@
 
                               For example, set it to ${fmt.code "builtins.readFile ./${name}.glsl"} to use a shader from the same directory as your configuration file.
 
-                              See: ${fmt.bare-link "https://github.com/YaLTeR/niri/wiki/Configuration:-Animations#custom-shader"}
+                              See: ${fmt.bare-link "https://github.com/niri-wm/niri/wiki/Configuration:-Animations#custom-shader"}
                             '';
                           };
                         }
@@ -2653,7 +2643,14 @@
                     };
                     open-maximized-to-edges = nullable types.bool // {
                       description = ''
-                        Whether to open this window maximized to the screen edges.
+                        Instead of maximizing the column, it tells the window that it is maximized (similarly to clicking on maximizing in the window's title bar).
+
+                        Read ${
+                          fmt.masked-link {
+                            href = "https://niri-wm.github.io/niri/Fullscreen-and-Maximize.html";
+                            content = "the doc on maximizing and fullscreen";
+                          }
+                        } for more information.
                       '';
                     };
                     open-fullscreen = nullable types.bool // {
@@ -2697,6 +2694,37 @@
                         If the final value of this field is not null, all of the above is ignored. Whether the window provides an activation token or not, doesn't matter. The window will be focused if and only if this field is true. If it is false, the window will not be focused, even if it provides a valid activation token.
                       '';
                     };
+                    on-xdg-activate =
+                      nullable (enum [
+                        "ignore"
+                        "set-urgent"
+                        "focus"
+                      ])
+                      // {
+                        description = ''
+                          What to do when this window requests activation through ${
+                            fmt.masked-link {
+                              href = "https://wayland.app/protocols/xdg-activation-v1";
+                              content = "xdg activation";
+                            }
+                          }.
+
+                          ${fmt.list [
+                            "${fmt.code "ignore"}: Do nothing; neither focus the window nor mark it urgent."
+                            "${fmt.code "set-urgent"}: Always mark the window urgent instead of focusing it."
+                            "${fmt.code "focus"}: Always focus the window, even for activation requests without a serial."
+                          ]}
+
+                          When this option is null, niri chooses between focusing the window and marking it urgent based on the serial that the application provides when creating the activation token. Requests with a valid serial focus the target window, while requests without a serial mark it urgent.
+
+                          Requests with a set but invalid serial are always ignored. You can change this behavior with the ${
+                            fmt.masked-link {
+                              href = "https://niri-wm.github.io/niri/Configuration%3A-Debug-Options.html#honor-xdg-activation-with-invalid-serial";
+                              content = fmt.code "honor-xdg-activation-with-invalid-serial";
+                            }
+                          } debug flag.
+                        '';
+                      };
                   }
                   {
                     block-out-from =
@@ -2869,6 +2897,10 @@
                         "fullscreen"
                       ]
                     );
+                    background-effect = background-effect "window";
+                  }
+                  {
+                    popups = popups (subopts options.window-rules).popups;
                   }
                 ]
               )
@@ -2896,6 +2928,13 @@
                   ];
                 };
 
+                layers = types.enum [
+                  "background"
+                  "bottom"
+                  "top"
+                  "overlay"
+                ];
+
                 layer-match = ordered-record' "match rule" [
                   {
                     namespace = nullable regex // {
@@ -2909,6 +2948,13 @@
                   {
                     at-startup = nullable types.bool // {
                       description = layer-rule-descriptions.match-at-startup;
+                    };
+                  }
+                  {
+                    layer = nullable layers // {
+                      description = ''
+                        Matches surfaces on this layer-shell layer.
+                      '';
                     };
                   }
                 ];
@@ -2963,6 +3009,12 @@
                       '';
                     };
                   }
+                  {
+                    background-effect = background-effect "layer";
+                  }
+                  {
+                    popups = popups (subopts options.layer-rules).popups;
+                  }
                 ]
               )
               // {
@@ -2985,6 +3037,153 @@
               // {
                 description = ''
                   Xwayland-satellite integration. Requires unstable niri and unstable xwayland-satellite.
+                '';
+              };
+          }
+
+          {
+            recent-windows = ordered-section [
+              {
+                enable = optional types.bool true;
+              }
+              {
+                debounce-ms = nullable types.int // {
+                  description = ''
+                    Delay, in milliseconds, between the window receiving focus and getting "committed" to the recent windows list.
+
+                    When you want to focus some window, you might end up focusing some unrelated windows on the way:
+                    ${fmt.list [
+                      "with keyboard navigation, the windows between your current one and the target one;"
+                      "with ${link-opt options.input.focus-follows-mouse.enable}, the windows you happen to cross with the mouse pointer on the way to the target window. "
+                    ]}
+
+                    The debounce delay prevents those intermediate windows from polluting the recent windows list.
+
+                    Note that some actions, like keyboard input into the target window, will skip this delay and commit the window to the list immediately. This way, the recent windows list stays responsive while not getting polluted too much with unintended windows.
+
+                    If you want windows to appear in recent windows right away, including intermediate windows, you can reduce the delay or set it to zero.
+                  '';
+                };
+              }
+              {
+                open-delay-ms = nullable types.int // {
+                  description = ''
+                    Delay, in milliseconds, between pressing the Alt-Tab bind and the recent windows switcher visually appearing on screen.
+
+                    The switcher is delayed by default so that quickly tapping Alt-Tab to switch windows wouldn't cause annoying fullscreen visual changes.
+                  '';
+                };
+              }
+              {
+                highlight = {
+                  active-color = nullable types.str // {
+                    description = ''
+                      Normal color of the focused window highlight.
+                    '';
+                  };
+                  urgent-color = nullable types.str // {
+                    description = ''
+                      Color of an urgent focused window highlight, also visible in a darker shade on unfocused windows.
+                    '';
+                  };
+                  padding = nullable types.int // {
+                    description = ''
+                      Padding of the highlight around the window preview, in logical pixels.
+                    '';
+                  };
+                  corner-radius = nullable types.int // {
+                    description = ''
+                      Corner radius of the highlight, for rounded corner.
+                    '';
+                  };
+                };
+              }
+              {
+                previews = {
+                  max-height = nullable types.int;
+                  max-scale = nullable types.float;
+                };
+              }
+              {
+                binds =
+                  attrs-record' "recent windows keybind" {
+                    action = required (rename "recent windows action" kdl.types.kdl-leaf) // {
+                      description = ''
+                        The available actions are ${fmt.code "next-window"} and ${fmt.code "previous-window"}. They can optionally have the following properties:
+
+                        ${fmt.list [
+                          "${fmt.code ''filter="app-id"''}: filters the switcher to the windows of the currently selected application, as determined by the Wayland app ID."
+                          "${fmt.code ''scope="all"''}, ${fmt.code ''scope="output"''}, ${fmt.code ''scope="workspace"''}: sets the pre-selected scope when this bind is used to open the recent windows switcher."
+                        ]}
+
+                        Their helper functions can be found under ${fmt.code "config.lib.niri.actions.recent-windows"}
+                      '';
+                    };
+                  }
+                  // {
+                    description = ''
+                      Bindings exclusive to the recent windows view. See ${
+                        fmt.masked-link {
+                          href = "https://niri-wm.github.io/niri/Configuration%3A-Recent-Windows.html#binds";
+                          content = "the official documentation";
+                        }
+                      } for more information.
+                    '';
+                  };
+              }
+            ];
+          }
+
+          {
+            blur =
+              ordered-section [
+                {
+                  enable = optional types.bool true // {
+                    description = ''
+                      Whether to allow apps to have a blurred background.
+
+                      This has an impact on both requested (through the wayland protocol) and forced (through layer and window rules).
+                    '';
+                  };
+                }
+                {
+                  passes = nullable types.int // {
+                    description = ''
+                      Number of downsample and upsample passes. More passes produce a smoother and larger blur but cost more GPU resources.
+                    '';
+                  };
+                }
+                {
+                  offset = nullable float-or-int // {
+                    description = ''
+                      Pixel offset multiplier of each pass (default is 1). Larger values produce smoother blur at no GPU cost. However, visual artifacts can appear with larger values. The solution is to increase the number of passes as well.
+
+                      Try to increase ${fmt.code "offset"} first, until artifacts appear. If a smoother blur is needed, increment ${fmt.code "passes"} by 1 until the artifacts disappear.
+                    '';
+                  };
+                }
+                {
+                  noise = nullable float-or-int // {
+                    description = ''
+                      Amount of noise to add on top of the blur.
+
+                      This is helpful to reduce color banding artifacts.
+                    '';
+                  };
+                }
+                {
+                  saturation = nullable float-or-int // {
+                    description = ''
+                      Color saturation applied to the blurred background.
+
+                      Values above ${fmt.code "1"} increase saturation; values below ${fmt.code "1"} reduce it.
+                    '';
+                  };
+                }
+              ]
+              // {
+                description = ''
+                  Global blur settings for both the ${fmt.code "ext-background-effect"} wayland protocol and layer or window rules.
                 '';
               };
           }
@@ -3129,6 +3328,7 @@
             - ${nixpkgs-link "niri"}
             - ${pkg-link "niri-unstable"}
           '';
+
         in
         {
           a.nonmodules = {
@@ -3337,6 +3537,7 @@
           touchy cfg
           ++ [
             (nullable leaf "calibration-matrix" cfg.calibration-matrix)
+            (flag' "map-to-focused-output" cfg.map-to-focused-output)
           ];
 
         touch =
@@ -3356,18 +3557,25 @@
             ) cfg
           );
 
-        borderish = map' plain (
-          cfg:
-          toggle "off" cfg [
-            (leaf "width" cfg.width)
-            (nullable leaf "urgent-color" cfg.urgent.color or null)
-            (nullable gradient' "urgent-gradient" cfg.urgent.gradient or null)
-            (nullable leaf "active-color" cfg.active.color or null)
-            (nullable gradient' "active-gradient" cfg.active.gradient or null)
-            (nullable leaf "inactive-color" cfg.inactive.color or null)
-            (nullable gradient' "inactive-gradient" cfg.inactive.gradient or null)
-          ]
-        );
+        borderish =
+          canBeNull:
+          map' (if canBeNull then plain' else plain) (
+            cfg:
+            let
+              maybe-null =
+                f: name: value:
+                if canBeNull then (nullable f name value) else f name value;
+            in
+            (if canBeNull then toggle' else toggle) "off" cfg [
+              (maybe-null leaf "width" cfg.width)
+              (nullable leaf "urgent-color" cfg.urgent.color or null)
+              (nullable gradient' "urgent-gradient" cfg.urgent.gradient or null)
+              (nullable leaf "active-color" cfg.active.color or null)
+              (nullable gradient' "active-gradient" cfg.active.gradient or null)
+              (nullable leaf "inactive-color" cfg.inactive.color or null)
+              (nullable gradient' "inactive-gradient" cfg.inactive.gradient or null)
+            ]
+          );
 
         shadow = map' (nullable plain) (
           cfg:
@@ -3452,6 +3660,17 @@
           (nullable gradient' "inactive-gradient" cfg.inactive.gradient or null)
         ]);
 
+        background-effect = map' plain' (cfg: [
+          (nullable leaf "blur" cfg.blur)
+          (nullable leaf "xray" cfg.xray)
+        ]);
+
+        popups = map' plain' (cfg: [
+          (nullable (map' leaf corner-radius) "geometry-corner-radius" cfg.geometry-corner-radius)
+          (nullable leaf "opacity" cfg.opacity)
+          (nullable background-effect "background-effect" cfg.background-effect)
+        ]);
+
         corner-radius = cfg: [
           cfg.top-left
           cfg.top-right
@@ -3511,13 +3730,70 @@
               (lib.mapAttrsToList leaf cfg.action)
             ];
 
+        recent-windows-bind = name: cfg: node name { } [ (lib.mapAttrsToList leaf cfg.action) ];
+
         pointer-tablet' =
           ext: name: cfg:
           plain' name (pointer-tablet cfg (ext cfg));
         pointer' = pointer-tablet' pointer;
         tablet' = pointer-tablet' tablet;
+
+        layout =
+          root:
+          let
+            maybe-null =
+              f: name: value:
+              if !root then (nullable f name value) else (f name value);
+          in
+          map' (if root then plain else plain') (
+            cfg:
+            [
+              (maybe-null leaf "gaps" cfg.gaps)
+              (plain' "struts" [
+                (maybe-null leaf "left" cfg.struts.left)
+                (maybe-null leaf "right" cfg.struts.right)
+                (maybe-null leaf "top" cfg.struts.top)
+                (maybe-null leaf "bottom" cfg.struts.bottom)
+              ])
+              (borderish (!root) "focus-ring" cfg.focus-ring)
+              (borderish (!root) "border" cfg.border)
+              (nullable leaf "background-color" cfg.background-color)
+              (shadow "shadow" cfg.shadow)
+              (nullable tab-indicator "tab-indicator" cfg.tab-indicator)
+            ]
+            ++ lib.optional root (
+              plain' "insert-hint" [
+                (toggle "off" cfg.insert-hint [
+                  (nullable leaf "color" cfg.insert-hint.display.color or null)
+                  (nullable gradient' "gradient" cfg.insert-hint.display.gradient or null)
+                ])
+              ]
+            )
+            ++ [
+              (maybe-null preset-sizes "default-column-width" cfg.default-column-width)
+              (maybe-null preset-sizes "preset-column-widths" cfg.preset-column-widths)
+              (maybe-null preset-sizes "preset-window-heights" cfg.preset-window-heights)
+              (maybe-null leaf "center-focused-column" cfg.center-focused-column)
+              (optional-node (cfg.default-column-display != "normal") (
+                maybe-null leaf "default-column-display" cfg.default-column-display
+              ))
+              (flag' "always-center-single-column" cfg.always-center-single-column)
+              (flag' "empty-workspace-above-first" cfg.empty-workspace-above-first)
+            ]
+          ) "layout";
+
+        include =
+          self:
+          if (lib.isString self) then
+            leaf "include" self
+          else
+            leaf "include" [
+              { inherit (self) optional; }
+              self.path
+            ];
       in
       normalize-nodes [
+        (each cfg.includes (cfg: include cfg))
         (plain "input" [
           (plain "keyboard" [
             (plain "xkb" [
@@ -3590,6 +3866,7 @@
               (optional-node (cfg.variable-refresh-rate != false) (
                 leaf "variable-refresh-rate" { on-demand = cfg.variable-refresh-rate == "on-demand"; }
               ))
+              (layout false cfg.layout)
             ])
           ])
         ]))
@@ -3610,35 +3887,7 @@
           ])
         ])
 
-        (plain "layout" [
-          (leaf "gaps" cfg.layout.gaps)
-          (plain "struts" [
-            (leaf "left" cfg.layout.struts.left)
-            (leaf "right" cfg.layout.struts.right)
-            (leaf "top" cfg.layout.struts.top)
-            (leaf "bottom" cfg.layout.struts.bottom)
-          ])
-          (borderish "focus-ring" cfg.layout.focus-ring)
-          (borderish "border" cfg.layout.border)
-          (nullable leaf "background-color" cfg.layout.background-color)
-          (shadow "shadow" cfg.layout.shadow)
-          (nullable tab-indicator "tab-indicator" cfg.layout.tab-indicator)
-          (plain' "insert-hint" [
-            (toggle "off" cfg.layout.insert-hint [
-              (nullable leaf "color" cfg.layout.insert-hint.display.color or null)
-              (nullable gradient' "gradient" cfg.layout.insert-hint.display.gradient or null)
-            ])
-          ])
-          (preset-sizes "default-column-width" cfg.layout.default-column-width)
-          (preset-sizes "preset-column-widths" cfg.layout.preset-column-widths)
-          (preset-sizes "preset-window-heights" cfg.layout.preset-window-heights)
-          (leaf "center-focused-column" cfg.layout.center-focused-column)
-          (optional-node (cfg.layout.default-column-display != "normal") (
-            leaf "default-column-display" cfg.layout.default-column-display
-          ))
-          (flag' "always-center-single-column" cfg.layout.always-center-single-column)
-          (flag' "empty-workspace-above-first" cfg.layout.empty-workspace-above-first)
-        ])
+        (layout true cfg.layout)
 
         (plain "cursor" [
           (leaf "xcursor-theme" cfg.cursor.theme)
@@ -3674,6 +3923,7 @@
         (each' cfg.workspaces (cfg: [
           (node "workspace" cfg.name [
             (nullable leaf "open-on-output" cfg.open-on-output)
+            (layout false cfg.layout)
           ])
         ]))
 
@@ -3697,12 +3947,14 @@
             (nullable leaf "open-fullscreen" cfg.open-fullscreen)
             (nullable leaf "open-floating" cfg.open-floating)
             (nullable leaf "open-focused" cfg.open-focused)
+            (nullable leaf "on-xdg-activate" cfg.on-xdg-activate)
             (nullable leaf "draw-border-with-background" cfg.draw-border-with-background)
             (nullable (map' leaf corner-radius) "geometry-corner-radius" cfg.geometry-corner-radius)
             (nullable leaf "clip-to-geometry" cfg.clip-to-geometry)
             (border-rule "border" cfg.border)
             (border-rule "focus-ring" cfg.focus-ring)
             (shadow-rule "shadow" cfg.shadow)
+            (background-effect "background-effect" cfg.background-effect)
             (tab-indicator-rule "tab-indicator" cfg.tab-indicator)
             (nullable leaf "opacity" cfg.opacity)
             (nullable leaf "min-width" cfg.min-width)
@@ -3716,6 +3968,7 @@
             (nullable leaf "scroll-factor" cfg.scroll-factor)
             (nullable leaf "tiled-state" cfg.tiled-state)
             (nullable leaf "inhibit-idle" cfg.inhibit-idle)
+            (popups "popups" cfg.popups)
           ])
         ]))
         (each cfg.layer-rules (cfg: [
@@ -3725,9 +3978,11 @@
             (nullable leaf "opacity" cfg.opacity)
             (nullable leaf "block-out-from" cfg.block-out-from)
             (shadow-rule "shadow" cfg.shadow)
+            (background-effect "background-effect" cfg.background-effect)
             (nullable (map' leaf corner-radius) "geometry-corner-radius" cfg.geometry-corner-radius)
             (nullable leaf "place-within-backdrop" cfg.place-within-backdrop)
             (nullable leaf "baba-is-float" cfg.baba-is-float)
+            (popups "popups" cfg.popups)
           ])
         ]))
 
@@ -3759,5 +4014,33 @@
         ])
 
         (map' plain' (lib.mapAttrsToList leaf) "debug" cfg.debug)
+        (plain' "recent-windows" [
+          (toggle "off" cfg.recent-windows [
+            (nullable leaf "debounce-ms" cfg.recent-windows.debounce-ms)
+            (nullable leaf "open-delay-ms" cfg.recent-windows.open-delay-ms)
+            (plain' "highlight" [
+              (nullable leaf "active-color" cfg.recent-windows.highlight.active-color)
+              (nullable leaf "urgent-color" cfg.recent-windows.highlight.urgent-color)
+              (nullable leaf "padding" cfg.recent-windows.highlight.padding)
+              (nullable leaf "corner-radius" cfg.recent-windows.highlight.corner-radius)
+            ])
+
+            (plain' "previews" [
+
+              (nullable leaf "max-height" cfg.recent-windows.previews.max-height)
+              (nullable leaf "max-scale" cfg.recent-windows.previews.max-scale)
+            ])
+            (plain' "binds" (lib.mapAttrsToList recent-windows-bind cfg.recent-windows.binds))
+          ])
+        ])
+
+        (plain' "blur" [
+          (toggle "off" cfg.blur [
+            (nullable leaf "passes" cfg.blur.passes)
+            (nullable leaf "offset" cfg.blur.offset)
+            (nullable leaf "noise" cfg.blur.noise)
+            (nullable leaf "saturation" cfg.blur.saturation)
+          ])
+        ])
       ];
 }

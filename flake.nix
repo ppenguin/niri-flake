@@ -201,21 +201,15 @@
               mv docs/wiki $doc/share/doc/niri/wiki
             '';
 
-          postFixup =
-            if replace-service-with-usr-bin then
-              ''
-                substituteInPlace $out/lib/systemd/user/niri.service --replace-fail /usr/bin $out/bin
-              ''
-            else
-              ''
-                substituteInPlace $out/lib/systemd/user/niri.service --replace-fail "ExecStart=niri" "ExecStart=$out/bin/niri"
-              '';
+          postFixup = ''
+            substituteInPlace $out/lib/systemd/user/niri.service --replace-fail "ExecStart=niri" "ExecStart=$out/bin/niri"
+          '';
 
           meta = {
             description = "Scrollable-tiling Wayland compositor";
-            homepage = "https://github.com/YaLTeR/niri";
+            homepage = "https://github.com/niri-wm/niri";
             license = nixpkgs.lib.licenses.gpl3Only;
-            maintainers = with nixpkgs.lib.maintainers; [ sodiboo ];
+            maintainers = with nixpkgs.lib.maintainers; [ epireyn ];
             mainProgram = "niri";
             platforms = nixpkgs.lib.platforms.linux;
           };
@@ -290,7 +284,7 @@
             description = "Rootless Xwayland integration to any Wayland compositor implementing xdg_wm_base";
             homepage = "https://github.com/Supreeeme/xwayland-satellite";
             license = nixpkgs.lib.licenses.mpl20;
-            maintainers = with nixpkgs.lib.maintainers; [ sodiboo ];
+            maintainers = with nixpkgs.lib.maintainers; [ epireyn ];
             mainProgram = "xwayland-satellite";
             platforms = nixpkgs.lib.platforms.linux;
           };
@@ -386,7 +380,7 @@
         }
       );
 
-      formatter = forAllSystems (system: inputs.nixpkgs.legacyPackages.${system}.nixfmt-rfc-style);
+      formatter = forAllSystems (system: inputs.nixpkgs.legacyPackages.${system}.nixfmt);
 
       devShells = forAllSystems (system: {
         default = import ./shell.nix {
@@ -418,19 +412,35 @@
             };
           };
 
-          config.lib.niri = {
-            actions = nixpkgs.lib.mergeAttrsList (
-              map (name: {
-                ${name} = kdl.magic-leaf name;
-              }) (import ./memo-binds.nix)
-            );
-          };
+          config.lib.niri =
+            let
+              mapActions =
+                list:
+                map (name: {
+                  ${name} = kdl.magic-leaf name;
+                }) list;
+            in
+            {
+              actions = nixpkgs.lib.mergeAttrsList (mapActions (import ./memo-binds.nix)) // {
+                recent-windows = mapActions [
+                  "next-window"
+                  "previous-window"
+                ];
+              };
+
+              include.optional = path: {
+                inherit path;
+                optional = true;
+              };
+            };
 
           config.xdg.configFile.niri-config = {
             enable = cfg.finalConfig != null;
             target = "niri/config.kdl";
             source = validated-config-for pkgs cfg.package cfg.finalConfig;
           };
+
+          disabledModules = [ "services/window-managers/niri.nix" ];
         };
       nixosModules.niri =
         {
@@ -465,8 +475,8 @@
           config = nixpkgs.lib.mkMerge [
             (nixpkgs.lib.mkIf config.niri-flake.cache.enable {
               nix.settings = {
-                substituters = [ "https://niri.cachix.org" ];
-                trusted-public-keys = [ "niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964=" ];
+                substituters = [ "https://niri-epireyn.cachix.org" ];
+                trusted-public-keys = [ "niri-epireyn.cachix.org-1:tlVyFN7CtsDT+ZcLPS+ekFWeT1X6X4OqvWqbBMyIzFA=" ];
               };
             })
             (nixpkgs.lib.mkIf cfg.enable {
@@ -580,7 +590,8 @@
                 modules = [
                   settings.module
                   {
-                    config.programs.niri.settings = { };
+                    config.programs.niri.settings = {
+                    };
                   }
                 ];
               };
