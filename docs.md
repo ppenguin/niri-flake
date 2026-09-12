@@ -3021,7 +3021,7 @@ Takes effect only when the window is on an output with [`outputs.<name>.variable
 
 
 ## `programs.niri.settings.window-rules.*.inhibit-idle`
-- type: `null or one of "always", "never", "fullscreen"`
+- type: `null or one of "always", "fullscreen"`
 - default: `null`
 
 

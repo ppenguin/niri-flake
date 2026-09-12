@@ -1,0 +1,153 @@
+Add an `inhibit-idle` window rule (upstream PR YaLTeR/niri#2373).
+
+Lets a window keep the idle notifier from firing, either unconditionally
+(`inhibit-idle "always"`) or only while it is fullscreen
+(`inhibit-idle "fullscreen"`). `inhibit-idle null` explicitly clears the rule
+again for a later, more specific match.
+
+Source: https://github.com/ppenguin/niri/tree/inhibit_idle
+Regenerated against the niri-unstable rev pinned in this flake's lock so it
+applies without fuzz; refresh it from that branch when it stops applying.
+--- a/niri-config/src/appearance.rs
++++ b/niri-config/src/appearance.rs
+@@ -622,6 +622,12 @@
+     ScreenCapture,
+ }
+ 
++#[derive(knuffel::DecodeScalar, Debug, Clone, Copy, PartialEq, Eq)]
++pub enum InhibitIdle {
++    Always,
++    Fullscreen,
++}
++
+ #[derive(knuffel::Decode, Debug, Default, Clone, Copy, PartialEq)]
+ pub struct BorderRule {
+     #[knuffel(child)]
+--- a/niri-config/src/lib.rs
++++ b/niri-config/src/lib.rs
+@@ -680,6 +680,36 @@
+     }
+ 
+     #[test]
++    fn inhibit() {
++        let parsed = do_parse(
++            r##"
++            window-rule {
++                inhibit-idle "fullscreen"                
++            }
++            window-rule {
++                inhibit-idle "always"
++            }
++            window-rule {
++                inhibit-idle null
++            }
++            window-rule {
++            }
++            "##,
++        );
++
++        assert!(matches!(
++            parsed.window_rules[0].inhibit_idle,
++            Some(Some(InhibitIdle::Fullscreen))
++        ));
++        assert!(matches!(
++            parsed.window_rules[1].inhibit_idle,
++            Some(Some(InhibitIdle::Always))
++        ));
++        assert!(matches!(parsed.window_rules[2].inhibit_idle, Some(None)));
++        assert!(matches!(parsed.window_rules[3].inhibit_idle, None));
++    }
++
++    #[test]
+     fn parse() {
+         let parsed = do_parse(
+             r##"
+@@ -1926,6 +1956,7 @@
+                             saturation: None,
+                         },
+                     },
++                    inhibit_idle: None,
+                 },
+             ],
+             layer_rules: [
+--- a/niri-config/src/window_rule.rs
++++ b/niri-config/src/window_rule.rs
+@@ -6,7 +6,7 @@
+ };
+ use crate::layout::DefaultPresetSize;
+ use crate::utils::{MergeWith, RegexEq};
+-use crate::FloatOrInt;
++use crate::{FloatOrInt, InhibitIdle};
+ 
+ #[derive(knuffel::Decode, Debug, Default, Clone, PartialEq)]
+ pub struct WindowRule {
+@@ -77,6 +77,8 @@
+     pub scroll_factor: Option<FloatOrInt<0, 100>>,
+     #[knuffel(child, unwrap(argument))]
+     pub tiled_state: Option<bool>,
++    #[knuffel(child, unwrap(argument))]
++    pub inhibit_idle: Option<Option<InhibitIdle>>,
+     #[knuffel(child, default)]
+     pub background_effect: BackgroundEffectRule,
+     #[knuffel(child, default)]
+--- a/src/niri.rs
++++ b/src/niri.rs
+@@ -16,7 +16,7 @@
+ use niri_config::debug::PreviewRender;
+ use niri_config::output::MaxBpc;
+ use niri_config::{
+-    Config, FloatOrInt, Key, Modifiers, OutputName, TrackLayout, WarpMouseToFocusMode,
++    Config, FloatOrInt, InhibitIdle, Key, Modifiers, OutputName, TrackLayout, WarpMouseToFocusMode,
+     WorkspaceReference, Xkb,
+ };
+ use smithay::backend::allocator::Fourcc;
+@@ -4029,7 +4029,17 @@
+                 with_states(surface, |states| {
+                     surface_primary_scanout_output(surface, states).is_some()
+                 })
+-            });
++            })
++            || self
++                .layout
++                .windows()
++                .into_iter()
++                .any(|a| match a.1.rules().inhibit_idle {
++                    Some(InhibitIdle::Always) => true,
++                    Some(InhibitIdle::Fullscreen) => a.1.sizing_mode().is_fullscreen(),
++                    None => false,
++                });
++
+         self.idle_notifier_state.set_is_inhibited(is_inhibited);
+     }
+ 
+--- a/src/window/mod.rs
++++ b/src/window/mod.rs
+@@ -4,7 +4,7 @@
+ use niri_config::window_rule::{Match, OnXdgActivate, WindowRule};
+ use niri_config::{
+     BackgroundEffect, BlockOutFrom, BorderRule, CornerRadius, FloatingPosition, PresetSize,
+-    ResolvedPopupsRules, ShadowRule, TabIndicatorRule,
++    ResolvedPopupsRules, ShadowRule, TabIndicatorRule, InhibitIdle,
+ };
+ use niri_ipc::ColumnDisplay;
+ use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+@@ -128,6 +128,9 @@
+ 
+     /// Rules for this window's popups.
+     pub popups: ResolvedPopupsRules,
++
++    /// Whether to inhibit idle for this window.
++    pub inhibit_idle: Option<InhibitIdle>,
+ }
+ 
+ impl<'a> WindowRef<'a> {
+@@ -309,6 +312,9 @@
+                 if let Some(x) = rule.tiled_state {
+                     resolved.tiled_state = Some(x);
+                 }
++                if let Some(x) = rule.inhibit_idle {
++                    resolved.inhibit_idle = x;
++                }
+ 
+                 resolved
+                     .background_effect

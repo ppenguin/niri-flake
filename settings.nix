@@ -2861,11 +2861,11 @@
                     tiled-state = nullable types.bool;
                   }
                   {
-                    # supports upstream PR 2373
+                    # supports upstream PR 2373, implemented by
+                    # patches/inhibit-idle.patch
                     inhibit-idle = nullable (
                       types.enum [
                         "always"
-                        "never"
                         "fullscreen"
                       ]
                     );
