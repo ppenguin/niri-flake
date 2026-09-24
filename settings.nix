@@ -1173,6 +1173,29 @@
                   This is like ${fmt.code ''center-focused-column = "always";''}, but only for workspaces with a single column. Changes nothing if ${fmt.code "center-focused-column"} is set to ${fmt.code ''"always"''}. Has no effect if more than one column is present.
                 '';
               };
+              column-anchor =
+                optional-default (enum [
+                  "left"
+                  "right"
+                  "toward-center"
+                  "away-from-center"
+                ]) "left"
+                // {
+                  description = ''
+                    Which edge new columns are anchored to, i.e. where the first column on a workspace appears and which direction subsequent columns are added in.
+
+                    ${fmt.list [
+                      "${fmt.code ''"left"''}: the first column is left-aligned, new columns appear to its right. This is the default."
+                      "${fmt.code ''"right"''}: the first column is right-aligned, new columns appear to its left."
+                      "${fmt.code ''"toward-center"''}: anchored to whichever edge of the monitor faces the center of the whole monitor layout. On a single monitor, or a monitor centered in the layout, this behaves like ${fmt.code ''"right"''}."
+                      "${fmt.code ''"away-from-center"''}: the mirror of ${fmt.code ''"toward-center"''}. On a single monitor, or a monitor centered in the layout, this behaves like ${fmt.code ''"left"''}."
+                    ]}
+
+                    ${fmt.code ''"toward-center"''} and ${fmt.code ''"away-from-center"''} are meant for multi-monitor setups: with two monitors side by side, ${fmt.code ''"toward-center"''} makes new columns grow from the seam between the monitors outward, so windows open next to each other rather than at the outer edges of the screen.
+
+                    ${fmt.code "center-focused-column"} set to ${fmt.code ''"always"''} and ${link-opt (subopts self).always-center-single-column} take precedence over ${fmt.code "column-anchor"} whenever they apply.
+                  '';
+                };
               default-column-display =
                 optional-default (enum [
                   "normal"
@@ -3778,6 +3801,7 @@
                 maybe-null leaf "default-column-display" cfg.default-column-display
               ))
               (flag' "always-center-single-column" cfg.always-center-single-column)
+              (optional-node (cfg.column-anchor != "left") (maybe-null leaf "column-anchor" cfg.column-anchor))
               (flag' "empty-workspace-above-first" cfg.empty-workspace-above-first)
             ]
           ) "layout";

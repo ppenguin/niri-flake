@@ -907,6 +907,23 @@ When changing focus, niri can automatically center the focused column.
 
 
 
+## `programs.niri.settings.workspaces.<name>.layout.column-anchor`
+- type: `null or one of "left", "right", "toward-center", "away-from-center"`
+- default: `null`
+
+Which edge new columns are anchored to, i.e. where the first column on a workspace appears and which direction subsequent columns are added in.
+
+- `"left"`: the first column is left-aligned, new columns appear to its right. This is the default.
+- `"right"`: the first column is right-aligned, new columns appear to its left.
+- `"toward-center"`: anchored to whichever edge of the monitor faces the center of the whole monitor layout. On a single monitor, or a monitor centered in the layout, this behaves like `"right"`.
+- `"away-from-center"`: the mirror of `"toward-center"`. On a single monitor, or a monitor centered in the layout, this behaves like `"left"`.
+
+
+`"toward-center"` and `"away-from-center"` are meant for multi-monitor setups: with two monitors side by side, `"toward-center"` makes new columns grow from the seam between the monitors outward, so windows open next to each other rather than at the outer edges of the screen.
+
+`center-focused-column` set to `"always"` and [`workspaces.<name>.layout.always-center-single-column`](#programsnirisettingsworkspacesnamelayoutalways-center-single-column) take precedence over `column-anchor` whenever they apply.
+
+
 ## `programs.niri.settings.workspaces.<name>.layout.default-column-display`
 - type: `null or one of "normal", "tabbed"`
 - default: `null`
@@ -2287,6 +2304,23 @@ When changing focus, niri can automatically center the focused column.
 
 
 
+## `programs.niri.settings.outputs.<name>.layout.column-anchor`
+- type: `null or one of "left", "right", "toward-center", "away-from-center"`
+- default: `null`
+
+Which edge new columns are anchored to, i.e. where the first column on a workspace appears and which direction subsequent columns are added in.
+
+- `"left"`: the first column is left-aligned, new columns appear to its right. This is the default.
+- `"right"`: the first column is right-aligned, new columns appear to its left.
+- `"toward-center"`: anchored to whichever edge of the monitor faces the center of the whole monitor layout. On a single monitor, or a monitor centered in the layout, this behaves like `"right"`.
+- `"away-from-center"`: the mirror of `"toward-center"`. On a single monitor, or a monitor centered in the layout, this behaves like `"left"`.
+
+
+`"toward-center"` and `"away-from-center"` are meant for multi-monitor setups: with two monitors side by side, `"toward-center"` makes new columns grow from the seam between the monitors outward, so windows open next to each other rather than at the outer edges of the screen.
+
+`center-focused-column` set to `"always"` and [`outputs.<name>.layout.always-center-single-column`](#programsnirisettingsoutputsnamelayoutalways-center-single-column) take precedence over `column-anchor` whenever they apply.
+
+
 ## `programs.niri.settings.outputs.<name>.layout.default-column-display`
 - type: `null or one of "normal", "tabbed"`
 - default: `null`
@@ -2925,6 +2959,23 @@ When changing focus, niri can automatically center the focused column.
 - `"on-overflow"`: if the focused column doesn't fit, it will be centered on the screen.
 - `"always"`: the focused column will always be centered, even if it was already fully visible.
 
+
+
+## `programs.niri.settings.layout.column-anchor`
+- type: `one of "left", "right", "toward-center", "away-from-center"`
+- default: `"left"`
+
+Which edge new columns are anchored to, i.e. where the first column on a workspace appears and which direction subsequent columns are added in.
+
+- `"left"`: the first column is left-aligned, new columns appear to its right. This is the default.
+- `"right"`: the first column is right-aligned, new columns appear to its left.
+- `"toward-center"`: anchored to whichever edge of the monitor faces the center of the whole monitor layout. On a single monitor, or a monitor centered in the layout, this behaves like `"right"`.
+- `"away-from-center"`: the mirror of `"toward-center"`. On a single monitor, or a monitor centered in the layout, this behaves like `"left"`.
+
+
+`"toward-center"` and `"away-from-center"` are meant for multi-monitor setups: with two monitors side by side, `"toward-center"` makes new columns grow from the seam between the monitors outward, so windows open next to each other rather than at the outer edges of the screen.
+
+`center-focused-column` set to `"always"` and [`layout.always-center-single-column`](#programsnirisettingslayoutalways-center-single-column) take precedence over `column-anchor` whenever they apply.
 
 
 ## `programs.niri.settings.layout.default-column-display`
