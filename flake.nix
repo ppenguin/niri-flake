@@ -293,9 +293,14 @@
       make-package-set = pkgs: {
         niri-unstable = pkgs.callPackage make-niri {
           src = inputs.niri-unstable;
-          # Implements the `inhibit-idle` window rule that `settings.nix` knows
-          # how to emit (upstream PR YaLTeR/niri#2373); the two must stay in sync.
-          patches = [ ./patches/inhibit-idle.patch ];
+          patches = [
+            # Implements the `inhibit-idle` window rule that `settings.nix` knows
+            # how to emit (upstream PR YaLTeR/niri#2373); the two must stay in sync.
+            ./patches/inhibit-idle.patch
+            # Implements the `column-anchor` layout option that `settings.nix`
+            # knows how to emit; the two must stay in sync.
+            ./patches/column-anchor.patch
+          ];
           replace-service-with-usr-bin = false;
         };
         xwayland-satellite-unstable = pkgs.callPackage make-xwayland-satellite {

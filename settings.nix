@@ -1173,6 +1173,7 @@
                   This is like ${fmt.code ''center-focused-column = "always";''}, but only for workspaces with a single column. Changes nothing if ${fmt.code "center-focused-column"} is set to ${fmt.code ''"always"''}. Has no effect if more than one column is present.
                 '';
               };
+              # implemented by patches/column-anchor.patch
               column-anchor =
                 optional-default (enum [
                   "left"

@@ -15,7 +15,7 @@ You should preferably not be using these outputs directly. Instead, you should u
 
 The latest commit to the development branch of niri.
 
-Currently, this is exactly commit [`9e72e49`](https://github.com/niri-wm/niri/tree/9e72e4917ca31baf4010496bf7f4aaf78d34d236) which was authored on `2026-09-11 11:58:30`.
+Currently, this is exactly commit [`c3e2566`](https://github.com/niri-wm/niri/tree/c3e25664b36f820ae7d4ec9eecfbdd26bd1db088) which was authored on `2026-09-24 17:05:24`.
 
 > [!warning]
 > `niri-unstable` is not a released version, there are no stability guarantees, and it may break your workflow from itme to time.
