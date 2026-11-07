@@ -14,7 +14,7 @@ Source: https://github.com/ppenguin/niri/tree/monitor-position-awareness-column-
 Regenerated against the niri-unstable rev pinned in this flake's lock so it
 applies without fuzz; refresh it from that branch when it stops applying.
 diff --git a/niri-config/src/layout.rs b/niri-config/src/layout.rs
-index f84528bd..49cf6f42 100644
+index dad9520..a2303c4 100644
 --- a/niri-config/src/layout.rs
 +++ b/niri-config/src/layout.rs
 @@ -19,6 +19,7 @@ pub struct Layout {
@@ -25,7 +25,7 @@ index f84528bd..49cf6f42 100644
      pub empty_workspace_above_first: bool,
      pub default_column_display: ColumnDisplay,
      pub gaps: f64,
-@@ -42,6 +43,7 @@ impl Default for Layout {
+@@ -43,6 +44,7 @@ impl Default for Layout {
              default_column_width: Some(PresetSize::Proportion(0.5)),
              center_focused_column: CenterFocusedColumn::Never,
              always_center_single_column: false,
@@ -33,7 +33,7 @@ index f84528bd..49cf6f42 100644
              empty_workspace_above_first: false,
              default_column_display: ColumnDisplay::Normal,
              gaps: 16.,
-@@ -75,6 +77,7 @@ impl MergeWith<LayoutPart> for Layout {
+@@ -77,6 +79,7 @@ impl MergeWith<LayoutPart> for Layout {
              preset_column_widths,
              preset_window_heights,
              center_focused_column,
@@ -41,7 +41,7 @@ index f84528bd..49cf6f42 100644
              default_column_display,
              struts,
              background_color,
-@@ -116,6 +119,8 @@ pub struct LayoutPart {
+@@ -119,6 +122,8 @@ pub struct LayoutPart {
      pub center_focused_column: Option<CenterFocusedColumn>,
      #[knuffel(child)]
      pub always_center_single_column: Option<Flag>,
@@ -50,7 +50,7 @@ index f84528bd..49cf6f42 100644
      #[knuffel(child)]
      pub empty_workspace_above_first: Option<Flag>,
      #[knuffel(child, unwrap(argument, str))]
-@@ -170,6 +175,24 @@ pub enum CenterFocusedColumn {
+@@ -175,6 +180,24 @@ pub enum CenterFocusedColumn {
      OnOverflow,
  }
  
@@ -76,10 +76,10 @@ index f84528bd..49cf6f42 100644
  where
      S: knuffel::traits::ErrorSpan,
 diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
-index 22e0d3db..86fcfb74 100644
+index af12605..f696b09 100644
 --- a/niri-config/src/lib.rs
 +++ b/niri-config/src/lib.rs
-@@ -1484,6 +1484,7 @@ mod tests {
+@@ -1995,6 +1995,7 @@ mod tests {
                  ],
                  center_focused_column: OnOverflow,
                  always_center_single_column: false,
@@ -88,10 +88,10 @@ index 22e0d3db..86fcfb74 100644
                  default_column_display: Tabbed,
                  gaps: 8.0,
 diff --git a/niri-ipc/src/lib.rs b/niri-ipc/src/lib.rs
-index dfbe59a0..eb7cc5b2 100644
+index 5120c18..7beaaf7 100644
 --- a/niri-ipc/src/lib.rs
 +++ b/niri-ipc/src/lib.rs
-@@ -1268,6 +1268,28 @@ pub struct LogicalOutput {
+@@ -1360,6 +1360,28 @@ pub struct LogicalOutput {
      pub scale: f64,
      /// Transform.
      pub transform: Transform,
@@ -121,7 +121,7 @@ index dfbe59a0..eb7cc5b2 100644
  
  /// Output transform, which goes counter-clockwise.
 diff --git a/resources/default-config.kdl b/resources/default-config.kdl
-index 1c4fc0e5..698534d2 100644
+index 190e595..29bf89f 100644
 --- a/resources/default-config.kdl
 +++ b/resources/default-config.kdl
 @@ -122,6 +122,16 @@ layout {
@@ -142,10 +142,10 @@ index 1c4fc0e5..698534d2 100644
      preset-column-widths {
          // Proportion sets the width as a fraction of the output width, taking gaps into account.
 diff --git a/src/ipc/client.rs b/src/ipc/client.rs
-index 78022ed9..a08e44fb 100644
+index 10830c9..8ac0719 100644
 --- a/src/ipc/client.rs
 +++ b/src/ipc/client.rs
-@@ -663,10 +663,12 @@ fn print_output(output: Output) -> anyhow::Result<()> {
+@@ -666,10 +666,12 @@ fn print_output(output: Output) -> anyhow::Result<()> {
              height,
              scale,
              transform,
@@ -159,7 +159,7 @@ index 78022ed9..a08e44fb 100644
          let transform = match transform {
              Transform::Normal => "normal",
 diff --git a/src/layout/mod.rs b/src/layout/mod.rs
-index 97f917a9..add10b09 100644
+index 13594c7..1ac2f22 100644
 --- a/src/layout/mod.rs
 +++ b/src/layout/mod.rs
 @@ -71,7 +71,7 @@ use crate::rubber_band::RubberBand;
@@ -171,7 +171,7 @@ index 97f917a9..add10b09 100644
  };
  use crate::window::ResolvedWindowRules;
  
-@@ -1497,6 +1497,20 @@ impl<W: LayoutElement> Layout<W> {
+@@ -1512,6 +1512,20 @@ impl<W: LayoutElement> Layout<W> {
          mon.update_output_size();
      }
  
@@ -193,7 +193,7 @@ index 97f917a9..add10b09 100644
          if let Some(InteractiveMoveState::Moving(move_)) = &self.interactive_move {
              if move_.tile.window().id() == window {
 diff --git a/src/layout/monitor.rs b/src/layout/monitor.rs
-index 761d226b..8a6fa4da 100644
+index 3befce1..c82154c 100644
 --- a/src/layout/monitor.rs
 +++ b/src/layout/monitor.rs
 @@ -3,7 +3,7 @@ use std::iter::zip;
@@ -324,7 +324,7 @@ index 761d226b..8a6fa4da 100644
      pub fn update_shaders(&mut self) {
          for ws in &mut self.workspaces {
              ws.update_shaders();
-@@ -2118,12 +2178,19 @@ impl<W: LayoutElement> Monitor<W> {
+@@ -2122,12 +2182,19 @@ impl<W: LayoutElement> Monitor<W> {
          self.layout_config.as_ref()
      }
  
@@ -347,7 +347,7 @@ index 761d226b..8a6fa4da 100644
  
          assert!(
 diff --git a/src/layout/scrolling.rs b/src/layout/scrolling.rs
-index c7d94c54..774f7336 100644
+index 5363611..9fdb004 100644
 --- a/src/layout/scrolling.rs
 +++ b/src/layout/scrolling.rs
 @@ -4,7 +4,7 @@ use std::rc::Rc;
@@ -557,7 +557,7 @@ index c7d94c54..774f7336 100644
  
              offset += self.columns[source_col_idx].render_offset();
 diff --git a/src/layout/tests.rs b/src/layout/tests.rs
-index a2da4ce5..521f0232 100644
+index a2da4ce..521f023 100644
 --- a/src/layout/tests.rs
 +++ b/src/layout/tests.rs
 @@ -3,8 +3,8 @@ use std::cell::{Cell, OnceCell, RefCell};
@@ -604,21 +604,19 @@ index a2da4ce5..521f0232 100644
              focus_ring,
              border,
 diff --git a/src/niri.rs b/src/niri.rs
-index abebcc2e..8495c989 100644
+index 50ee830..392d9b9 100644
 --- a/src/niri.rs
 +++ b/src/niri.rs
-@@ -187,8 +187,8 @@ use crate::utils::watcher::Watcher;
+@@ -191,7 +191,7 @@ use crate::utils::watcher::Watcher;
  use crate::utils::xwayland::satellite::Satellite;
  use crate::utils::{
-     center, center_f64, expand_home, get_monotonic_time, ipc_transform_to_smithay, is_mapped,
--    logical_output, make_screenshot_path, output_matches_name, output_size, panel_orientation,
--    send_scale_transform, winit_scale, write_png_rgba8, xwayland,
-+    logical_output, make_screenshot_path, output_gravities, output_matches_name, output_size,
-+    panel_orientation, send_scale_transform, winit_scale, write_png_rgba8, xwayland,
+     center, center_f64, get_monotonic_time, ipc_transform_to_smithay, is_mapped, logical_output,
+-    make_screenshot_path, output_matches_name, output_size, panel_orientation,
++    make_screenshot_path, output_gravities, output_matches_name, output_size, panel_orientation,
+     send_scale_transform, winit_scale, write_png_rgba8, xwayland,
  };
- use crate::window::mapped::MappedId;
- use crate::window::{InitialConfigureState, Mapped, ResolvedWindowRules, Unmapped, WindowRef};
-@@ -2076,7 +2076,13 @@ impl State {
+ use crate::window::mapped::{MappedId, WindowCastRenderElements};
+@@ -2240,7 +2240,13 @@ impl State {
                  .global_space
                  .outputs()
                  .find(|output| output.name() == ipc_output.name)
@@ -633,7 +631,7 @@ index abebcc2e..8495c989 100644
              ipc_output.logical = logical;
          }
  
-@@ -2958,6 +2964,31 @@ impl Niri {
+@@ -3157,6 +3163,31 @@ impl Niri {
                  self.queue_redraw(&output);
              }
          }
@@ -665,7 +663,7 @@ index abebcc2e..8495c989 100644
      }
  
      pub fn add_output(&mut self, output: Output, refresh_interval: Option<Duration>, vrr: bool) {
-@@ -3153,6 +3184,10 @@ impl Niri {
+@@ -3352,6 +3383,10 @@ impl Niri {
  
          self.layout.update_output_size(output);
  
@@ -677,7 +675,7 @@ index abebcc2e..8495c989 100644
              state.backdrop_buffer.resize(output_size);
  
 diff --git a/src/utils/mod.rs b/src/utils/mod.rs
-index 6d513eb6..d6790d62 100644
+index 6d513eb..d6790d6 100644
 --- a/src/utils/mod.rs
 +++ b/src/utils/mod.rs
 @@ -226,9 +226,98 @@ pub fn logical_output(output: &Output) -> niri_ipc::LogicalOutput {

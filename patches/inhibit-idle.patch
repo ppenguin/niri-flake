@@ -8,9 +8,11 @@ again for a later, more specific match.
 Source: https://github.com/ppenguin/niri/tree/inhibit_idle
 Regenerated against the niri-unstable rev pinned in this flake's lock so it
 applies without fuzz; refresh it from that branch when it stops applying.
+diff --git a/niri-config/src/appearance.rs b/niri-config/src/appearance.rs
+index a1c8327..dfe1343 100644
 --- a/niri-config/src/appearance.rs
 +++ b/niri-config/src/appearance.rs
-@@ -622,6 +622,12 @@
+@@ -622,6 +622,12 @@ pub enum BlockOutFrom {
      ScreenCapture,
  }
  
@@ -23,12 +25,15 @@ applies without fuzz; refresh it from that branch when it stops applying.
  #[derive(knuffel::Decode, Debug, Default, Clone, Copy, PartialEq)]
  pub struct BorderRule {
      #[knuffel(child)]
+diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
+index fad654b..af12605 100644
 --- a/niri-config/src/lib.rs
 +++ b/niri-config/src/lib.rs
-@@ -680,6 +680,36 @@
+@@ -1145,6 +1145,36 @@ mod tests {
+         );
      }
  
-     #[test]
++    #[test]
 +    fn inhibit() {
 +        let parsed = do_parse(
 +            r##"
@@ -58,11 +63,10 @@ applies without fuzz; refresh it from that branch when it stops applying.
 +        assert!(matches!(parsed.window_rules[3].inhibit_idle, None));
 +    }
 +
-+    #[test]
+     #[test]
      fn parse() {
          let parsed = do_parse(
-             r##"
-@@ -1926,6 +1956,7 @@
+@@ -2421,6 +2451,7 @@ mod tests {
                              saturation: None,
                          },
                      },
@@ -70,9 +74,11 @@ applies without fuzz; refresh it from that branch when it stops applying.
                  },
              ],
              layer_rules: [
+diff --git a/niri-config/src/window_rule.rs b/niri-config/src/window_rule.rs
+index b3543f9..1859b30 100644
 --- a/niri-config/src/window_rule.rs
 +++ b/niri-config/src/window_rule.rs
-@@ -6,7 +6,7 @@
+@@ -7,7 +7,7 @@ use crate::appearance::{
  };
  use crate::layout::DefaultPresetSize;
  use crate::utils::{MergeWith, RegexEq};
@@ -81,8 +87,8 @@ applies without fuzz; refresh it from that branch when it stops applying.
  
  #[derive(knuffel::Decode, Debug, Default, Clone, PartialEq)]
  pub struct WindowRule {
-@@ -77,6 +77,8 @@
-     pub scroll_factor: Option<FloatOrInt<0, 100>>,
+@@ -80,6 +80,8 @@ pub struct WindowRule {
+     pub pinch_sensitivity: Option<FloatOrInt<0, 100>>,
      #[knuffel(child, unwrap(argument))]
      pub tiled_state: Option<bool>,
 +    #[knuffel(child, unwrap(argument))]
@@ -90,18 +96,21 @@ applies without fuzz; refresh it from that branch when it stops applying.
      #[knuffel(child, default)]
      pub background_effect: BackgroundEffectRule,
      #[knuffel(child, default)]
+diff --git a/src/niri.rs b/src/niri.rs
+index 2705d6d..50ee830 100644
 --- a/src/niri.rs
 +++ b/src/niri.rs
-@@ -16,7 +16,7 @@
- use niri_config::debug::PreviewRender;
+@@ -18,7 +18,8 @@ use niri_config::input::XkbFile;
  use niri_config::output::MaxBpc;
+ use niri_config::window_rule::VrrRule;
  use niri_config::{
--    Config, FloatOrInt, Key, Modifiers, OutputName, TrackLayout, WarpMouseToFocusMode,
-+    Config, FloatOrInt, InhibitIdle, Key, Modifiers, OutputName, TrackLayout, WarpMouseToFocusMode,
+-    Bind, Config, FloatOrInt, Key, Modifiers, OutputName, TrackLayout, WarpMouseToFocusMode,
++    Bind, Config, FloatOrInt, InhibitIdle, Key, Modifiers, OutputName, TrackLayout,
++    WarpMouseToFocusMode,
      WorkspaceReference, Xkb,
  };
  use smithay::backend::allocator::Fourcc;
-@@ -4029,7 +4029,17 @@
+@@ -4369,7 +4370,17 @@ impl Niri {
                  with_states(surface, |states| {
                      surface_primary_scanout_output(surface, states).is_some()
                  })
@@ -120,10 +129,12 @@ applies without fuzz; refresh it from that branch when it stops applying.
          self.idle_notifier_state.set_is_inhibited(is_inhibited);
      }
  
+diff --git a/src/window/mod.rs b/src/window/mod.rs
+index c6a24b1..b6e8a7c 100644
 --- a/src/window/mod.rs
 +++ b/src/window/mod.rs
-@@ -4,7 +4,7 @@
- use niri_config::window_rule::{Match, OnXdgActivate, WindowRule};
+@@ -4,7 +4,7 @@ use niri_config::utils::MergeWith as _;
+ use niri_config::window_rule::{Match, OnXdgActivate, VrrRule, WindowRule};
  use niri_config::{
      BackgroundEffect, BlockOutFrom, BorderRule, CornerRadius, FloatingPosition, PresetSize,
 -    ResolvedPopupsRules, ShadowRule, TabIndicatorRule,
@@ -131,7 +142,7 @@ applies without fuzz; refresh it from that branch when it stops applying.
  };
  use niri_ipc::ColumnDisplay;
  use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
-@@ -128,6 +128,9 @@
+@@ -131,6 +131,9 @@ pub struct ResolvedWindowRules {
  
      /// Rules for this window's popups.
      pub popups: ResolvedPopupsRules,
@@ -141,7 +152,7 @@ applies without fuzz; refresh it from that branch when it stops applying.
  }
  
  impl<'a> WindowRef<'a> {
-@@ -309,6 +312,9 @@
+@@ -315,6 +318,9 @@ impl ResolvedWindowRules {
                  if let Some(x) = rule.tiled_state {
                      resolved.tiled_state = Some(x);
                  }
